@@ -1,0 +1,262 @@
+/* ==========================================================================
+   style.css — Tailwind CSS v4 — palette claire (rôles type Material 3)
+
+   Pas de "preflight" Tailwind (reset global) pour ne pas affecter le reste de
+   l'application. Si votre projet charge déjà Tailwind complet, remplacez les
+   3 lignes @layer / @import par : @import "tailwindcss";
+   ========================================================================== */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* "static" : toutes les variables sont émises, même celles non utilisées par une classe
+   (pratique pour var(--color-primary) dans le template ou le JS). */
+@theme static {
+  --color-surface: #faf9f6;
+  --color-surface-dim: #dbdad7;
+  --color-surface-bright: #faf9f6;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f4f3f0;
+  --color-surface-container: #efeeeb;
+  --color-surface-container-high: #e9e8e5;
+  --color-surface-container-highest: #e3e2df;
+  --color-on-surface: #1b1c1a;
+  --color-on-surface-variant: #55433f;
+  --color-inverse-surface: #2f312f;
+  --color-inverse-on-surface: #f2f1ee;
+  --color-outline: #87726e;
+  --color-outline-variant: #dac1bc;
+  --color-surface-tint: #964737;
+
+  --color-primary: #6d281a;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #8b3e2f;
+  --color-on-primary-container: #ffbaac;
+  --color-inverse-primary: #ffb4a5;
+
+  --color-secondary: #8c4f25;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #ffaf7d;
+  --color-on-secondary-container: #794017;
+
+  --color-tertiary: #513a00;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #6e5000;
+  --color-on-tertiary-container: #f3c35c;
+
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+
+  --color-primary-fixed: #ffdad3;
+  --color-primary-fixed-dim: #ffb4a5;
+  --color-on-primary-fixed: #3e0501;
+  --color-on-primary-fixed-variant: #783022;
+  --color-secondary-fixed: #ffdbc8;
+  --color-secondary-fixed-dim: #ffb68b;
+  --color-on-secondary-fixed: #321300;
+  --color-on-secondary-fixed-variant: #6f3810;
+  --color-tertiary-fixed: #ffdea1;
+  --color-tertiary-fixed-dim: #efc059;
+  --color-on-tertiary-fixed: #261900;
+  --color-on-tertiary-fixed-variant: #5c4300;
+
+  --color-background: #faf9f6;
+  --color-on-background: #1b1c1a;
+  --color-surface-variant: #e3e2df;
+}
+
+@layer components {
+  .up-root {
+    /* Alias conservés : le template utilise var(--accent) / var(--accent-dim) en style inline */
+    --accent: var(--color-primary);
+    --accent-dim: var(--color-primary-container);
+
+    @apply flex w-full min-h-[400px] overflow-hidden box-border bg-background text-on-background;
+    height: var(--up-height, 100vh);
+    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+
+    & * {
+      @apply box-border;
+    }
+    & button,
+    & input,
+    & select {
+      font-family: inherit;
+    }
+
+    /* ---------- SIDEBAR ---------- */
+    & #sidebar {
+      @apply w-[310px] min-w-[310px] bg-surface-container-low border-r border-outline-variant flex flex-col overflow-y-auto;
+    }
+    & #sidebar::-webkit-scrollbar {
+      @apply w-2;
+    }
+    & #sidebar::-webkit-scrollbar-thumb {
+      @apply bg-outline-variant rounded;
+    }
+
+    & .sb-header {
+      @apply pt-[18px] px-[18px] pb-2.5 border-b border-outline-variant;
+    }
+    & .sb-header h1 {
+      @apply text-[15px] mt-0 mx-0 mb-1 tracking-[.3px] flex items-center gap-2 text-on-surface;
+    }
+    & .sb-header p {
+      @apply m-0 text-[11.5px] text-on-surface-variant leading-[1.4];
+    }
+
+    & .sb-section {
+      @apply py-3.5 px-[18px] border-b border-outline-variant;
+    }
+    & .sb-section h2 {
+      @apply text-[11px] uppercase tracking-[.08em] text-on-surface-variant m-0 mb-2.5 font-semibold;
+    }
+
+    /* ---------- BOUTONS D'OUTILS ---------- */
+    & .tool-grid {
+      @apply grid grid-cols-2 gap-1.5;
+    }
+    & .tool-btn {
+      @apply flex flex-col items-center justify-center gap-1 py-[9px] px-1 rounded-lg
+             bg-surface-container-lowest border border-outline-variant text-on-surface cursor-pointer
+             text-[11px] text-center select-none transition-all duration-[120ms] ease-in-out;
+    }
+    & .tool-btn .ico {
+      @apply text-[18px] leading-none;
+    }
+    & .tool-btn:hover {
+      @apply border-primary-container bg-surface-container-high;
+    }
+    & .tool-btn.active {
+      @apply border-primary text-on-primary font-semibold;
+      background: linear-gradient(160deg, var(--color-primary-container), var(--color-primary));
+    }
+
+    /* Éditer le tracé (secondary) */
+    & .tool-btn.edit-btn {
+      @apply col-span-2 bg-secondary-fixed border-secondary-fixed-dim text-on-secondary-fixed;
+    }
+    & .tool-btn.edit-btn:hover {
+      @apply border-secondary bg-secondary-fixed-dim;
+    }
+    & .tool-btn.edit-btn.active {
+      @apply border-secondary text-on-secondary;
+      background: linear-gradient(160deg, var(--color-secondary-container), var(--color-secondary));
+    }
+
+    /* Ajouter une branche (tertiary) */
+    & .tool-btn.branch-btn {
+      @apply col-span-2 bg-tertiary-fixed border-tertiary-fixed-dim text-on-tertiary-fixed;
+    }
+    & .tool-btn.branch-btn:hover {
+      @apply border-tertiary bg-tertiary-fixed-dim;
+    }
+    & .tool-btn.branch-btn.active {
+      @apply border-tertiary text-on-tertiary;
+      background: linear-gradient(160deg, var(--color-tertiary-container), var(--color-tertiary));
+    }
+
+    /* Supprimer (error) */
+    & .tool-btn.delete-btn {
+      @apply col-span-2 bg-error-container border-error/30 text-on-error-container;
+    }
+    & .tool-btn.delete-btn:hover {
+      @apply border-error;
+    }
+    & .tool-btn.delete-btn.active {
+      @apply border-error text-on-error;
+      background: linear-gradient(160deg, var(--color-error), var(--color-on-error-container));
+    }
+
+    & .tool-btn.template-btn {
+      @apply bg-primary-fixed border-primary-fixed-dim text-on-primary-fixed text-[11.5px];
+    }
+    & .tool-btn.template-btn.active {
+      @apply border-primary text-on-primary font-semibold;
+      background: linear-gradient(160deg, var(--color-primary-container), var(--color-primary));
+    }
+
+    /* ---------- VALIDER / ANNULER ---------- */
+    & .action-row {
+      @apply flex gap-2 mt-2.5;
+    }
+    & .action-btn {
+      @apply flex-1 py-[9px] px-1 rounded-lg border border-outline-variant bg-surface-container-lowest
+             text-on-surface cursor-pointer text-xs;
+    }
+    & .action-btn:hover {
+      @apply border-primary-container bg-surface-container-high;
+    }
+    & .action-btn.validate {
+      @apply text-tertiary font-semibold;
+    }
+    & .action-btn.cancel {
+      @apply text-error font-semibold;
+    }
+
+    /* ---------- PARAMÈTRES ---------- */
+    & .setting-row {
+      @apply flex items-center justify-between mb-2 text-xs gap-2;
+    }
+    & .setting-row label {
+      @apply text-on-surface-variant flex-1;
+    }
+    & .setting-row input[type=number] {
+      @apply w-16 bg-surface-container-lowest border border-outline-variant text-on-surface rounded-md py-1 px-1.5 text-xs;
+    }
+    & .setting-row input[type=color] {
+      @apply w-[38px] h-[26px] border border-outline-variant rounded-md bg-transparent p-0 cursor-pointer;
+    }
+    & .setting-row select {
+      @apply bg-surface-container-lowest border border-outline-variant text-on-surface rounded-md py-1 px-1.5 text-xs max-w-[150px];
+    }
+    & .setting-row input:focus,
+    & .setting-row select:focus {
+      @apply outline-none border-primary;
+    }
+
+    /* ---------- LÉGENDE ---------- */
+    & .legend {
+      @apply flex flex-col gap-[5px];
+    }
+    & .legend-item {
+      @apply flex items-center gap-2 text-[11px] text-on-surface-variant;
+    }
+    & .swatch {
+      @apply size-4 rounded shrink-0 border border-outline-variant;
+    }
+
+    /* ---------- BARRE DE STATUT ---------- */
+    & #status-bar {
+      @apply mt-auto py-3.5 px-[18px] bg-surface-container border-t border-outline-variant
+             text-xs text-on-surface-variant leading-normal min-h-[70px];
+    }
+    & #status-bar strong {
+      @apply text-primary;
+    }
+
+    & .clear-all {
+      @apply w-full p-[9px] rounded-lg border border-error/40 bg-error-container
+             text-on-error-container cursor-pointer text-xs mt-1.5;
+    }
+    & .clear-all:hover {
+      @apply bg-error text-on-error;
+    }
+
+    /* ---------- CARTE ---------- */
+    & #map-wrap {
+      @apply flex-1 relative min-w-0;
+    }
+    & #map {
+      @apply absolute inset-0 bg-surface-dim;
+    }
+    & .up-overlay-canvas {
+      @apply absolute top-0 left-0 pointer-events-none z-[450];
+    }
+    & .leaflet-control-attribution {
+      @apply text-[10px];
+    }
+  }
+}
