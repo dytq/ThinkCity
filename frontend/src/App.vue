@@ -18,6 +18,7 @@
           <button class="tool-btn" data-tool="chevron_velo"><span class="ico">˄˄</span>Chevrons vélo</button>
           <button class="tool-btn" data-tool="rue_cyclable"><span class="ico">Ⓑ</span>Rue cyclable</button>
           <button class="tool-btn" data-tool="feu_tricolore"><span class="ico">🚦</span>Feu tricolore</button>
+          <button class="tool-btn" data-tool="feu_clignotant"><span class="ico">🟡</span>Feu clignotant</button>
           <button class="tool-btn" data-tool="stationnement"><span class="ico">🅿️</span>Stationnement</button>
           <button class="tool-btn" data-tool="espace_vert"><span class="ico">🌿</span>Espace vert</button>
           <button class="tool-btn" data-tool="massif"><span class="ico">🌳</span>Massif</button>
@@ -110,6 +111,7 @@
           <div class="legend-item"><span class="swatch" style="background:#b9b2a3;"></span>Chemin piéton</div>
           <div class="legend-item"><span class="swatch" style="background:#ffffff;"></span>Passage piéton / Cédez-le-passage</div>
           <div class="legend-item"><span class="swatch" style="background:#e14b4b;"></span>Feu tricolore</div>
+          <div class="legend-item"><span class="swatch" style="background:#ffcc00;"></span>Feu clignotant</div>
           <div class="legend-item"><span class="swatch" style="background:#4a7c3a;"></span>Espace vert / Arbre</div>
         </div>
         <button class="clear-all" id="btn-clear-all">🗑️ Effacer tout le projet</button>
@@ -189,6 +191,7 @@ const toolConfig = {
   chevron_velo:    {label:'Chevron vélo',     mode:'twopoint',minPoints:2},
   rue_cyclable:    {label:'Rue cyclable',     mode:'line',    minPoints:2},
   feu_tricolore:   {label:'Feu tricolore',    mode:'point',   minPoints:1},
+  feu_clignotant:  {label:'Feu clignotant',   mode:'point',   minPoints:1},
   arbre:           {label:'Arbre isolé',      mode:'point',   minPoints:1},
   edit:            {label:'Éditer',           mode:'edit',    minPoints:0},
   branch:          {label:'Branche',          mode:'branch',  minPoints:1}
@@ -212,6 +215,7 @@ const instructions = {
   chevron_velo:   'Cliquez le point de départ puis un point indiquant le sens de circulation (2 clics).',
   rue_cyclable:   'Cliquez pour tracer l\'axe de la rue cyclable (pictogrammes répétés). Validez avec Entrée.',
   feu_tricolore:  'Cliquez sur le bord de la route pour positionner le feu tricolore.',
+  feu_clignotant: 'Cliquez sur la carte pour positionner le feu clignotant.',
   arbre:          'Cliquez sur la carte pour planter un arbre.',
   edit:           'Cliquez sur un élément pour afficher ses points de contrôle et ajuster sa géométrie et sa valeur Z.',
   branch:         'Survolez et cliquez sur un nœud d\'un chemin existant pour y démarrer une nouvelle branche.',
@@ -219,17 +223,48 @@ const instructions = {
 }
 
 const zOrderBase = {
-  espace_vert:0, massif:1, hachures:2, chemin_pieton:3, piste_cyclable:4,
-  bande_cyclable:4.5, rue_cyclable:4.6,
-  route:5, rond_point:6, stationnement:7, passage_pieton:8, cedez_le_passage:9,
-  ligne_stop:10, stop_sol:10.2, fleche_sol:10.4, chevron_velo:10.6,
-  arbre:11, feu_tricolore:12
+  route: 0,
+  espace_vert: 1,
+  massif: 2,
+  hachures: 3,
+
+  piste_cyclable: 4,
+  bande_cyclable: 4.5,
+  rue_cyclable: 4.6,
+  chemin_pieton: 5,
+
+  rond_point: 6,
+  stationnement: 7,
+
+  passage_pieton: 8,
+  cedez_le_passage: 9,
+  ligne_stop: 10,
+  stop_sol: 10.2,
+  fleche_sol: 10.4,
+  chevron_velo: 10.6,
+
+  arbre: 11,
+  feu_tricolore: 12,
+  feu_clignotant: 12.5
 }
 
 /* ============================================================
    ACCÈS AU DOM (limité au composant)
    ============================================================ */
 function byId(id){ return root.value.querySelector('#' + id) }
+
+/* animate ligh */ 
+let blinkState = true
+let blinkAnimationId = null
+
+function animateBlinkingLights() {
+  blinkState = !blinkState
+  draw()
+  blinkAnimationId = requestAnimationFrame(() => {
+    setTimeout(animateBlinkingLights, 500)
+  })
+}
+
 
 /* ============================================================
    OUTILS / INTERACTIONS
@@ -353,7 +388,7 @@ function findNearestElement(containerPoint){
   elements.forEach(e=>{
     const pts = e.coords.map(cp)
     let d
-    if(['arbre', 'feu_tricolore', 'rond_point'].includes(e.type)){
+    if(['arbre', 'feu_tricolore', 'feu_clignotant', 'rond_point'].includes(e.type)){
       d = dist(pts[0], containerPoint)
     } else if(['espace_vert', 'massif', 'hachures'].includes(e.type)){
       d = pointInPolygon(containerPoint, pts) ? 0 : minDistToSegments(pts, containerPoint, true)
@@ -495,6 +530,8 @@ onMounted(()=>{
   L.tileLayer(TILE_URL, TILE_OPTS).addTo(map)
   L.control.scale({metric:true, imperial:false}).addTo(map)
 
+  animateBlinkingLights()
+
   overlay = document.createElement('canvas')
   overlay.className = 'up-overlay-canvas'
   map.getContainer().appendChild(overlay)
@@ -570,5 +607,8 @@ onBeforeUnmount(()=>{
   if(map){ map.remove(); map = null }
   overlay = null
   ctx = null
+  if (blinkAnimationId) {
+    cancelAnimationFrame(blinkAnimationId)
+  }
 })
 </script>

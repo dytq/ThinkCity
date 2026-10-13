@@ -96,12 +96,52 @@ function draw(){
       case 'fleche_sol':     drawGroundArrow(e); break
       case 'chevron_velo':   drawSharrow(e); break
       case 'arbre':          drawTree(e); break
+      case 'feu_clignotant': drawBlinkingLight(e); break
       case 'feu_tricolore':  drawTrafficLight(e); break
     }
   })
   drawEditHandles()
   drawBranchNodesOverlay()
   drawPreview()
+}
+
+function drawBlinkingLight(e) {
+  const p = cp(e.coords[0])
+  
+  const isBlinkingOn = (Math.floor(Date.now() / 400) % 2 === 0)
+
+  ctxRef.save()
+  
+  ctxRef.strokeStyle = '#333333'
+  ctxRef.lineWidth = 3
+  ctxRef.beginPath()
+  ctxRef.moveTo(p.x, p.y + 10)
+  ctxRef.lineTo(p.x, p.y - 12)
+  ctxRef.stroke()
+
+  ctxRef.fillStyle = '#1a1a1a'
+  ctxRef.strokeStyle = '#444'
+  ctxRef.lineWidth = 1
+  ctxRef.fillRect(p.x - 6, p.y - 24, 12, 16)
+  ctxRef.strokeRect(p.x - 6, p.y - 24, 12, 16)
+
+  if (isBlinkingOn) {
+    ctxRef.beginPath()
+    ctxRef.arc(p.x, p.y - 16, 12, 0, Math.PI * 2)
+    ctxRef.fillStyle = 'rgba(255, 204, 0, 0.35)'
+    ctxRef.fill()
+  }
+
+  ctxRef.beginPath()
+  ctxRef.arc(p.x, p.y - 16, 4.5, 0, Math.PI * 2)
+  ctxRef.fillStyle = isBlinkingOn ? '#ffcc00' : '#665200'
+  ctxRef.fill()
+
+  ctxRef.strokeStyle = '#ffffff'
+  ctxRef.lineWidth = 1.2
+  ctxRef.stroke()
+
+  ctxRef.restore()
 }
 
 function drawEditHandles(){
