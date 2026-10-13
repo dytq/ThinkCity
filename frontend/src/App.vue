@@ -125,19 +125,43 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { 
+  ref, 
+  onMounted, 
+  onBeforeUnmount 
+} from 'vue'
+
+import {
+  initGeometry,
+  cp,
+  dist,
+  metersToPixels,
+  pathFromPoints,
+  catmullRomSpline,
+  smoothIfNeeded,
+  walkPath,
+  distToSegment,
+  minDistToSegments,
+  offsetPolyline,
+  pointInPolygon,
+  offsetLatLng,
+  circleLatLng,
+  makeSquareIsland,
+  makeCrossing
+} from "./geometry.js";
+
+import { buildPatterns } from "./texture.js";
+
 import L from 'leaflet'
+
 import 'leaflet/dist/leaflet.css'
 
-/* Fond de carte. NB : les tuiles Google ne sont pas autorisées hors API officielle.
-   Pour un projet en production, préférez par ex. Esri World Imagery ou l'IGN (Géoplateforme). */
 const TILE_URL = 'https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'
 const TILE_OPTS = { maxZoom: 21, maxNativeZoom: 21, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], attribution: 'Imagerie &copy; Google' }
 
 const root = ref(null)
 const mapEl = ref(null)
 
-/* Objets non réactifs (Leaflet / Canvas ne doivent pas être proxifiés par Vue) */
 let map = null
 let overlay = null
 let ctx = null
@@ -214,191 +238,6 @@ const zOrderBase = {
    ACCÈS AU DOM (limité au composant)
    ============================================================ */
 function byId(id){ return root.value.querySelector('#' + id) }
-
-/* ============================================================
-   TEXTURES
-   ============================================================ */
-function makeTile(size, drawFn){
-  const c = document.createElement('canvas')
-  c.width = size; c.height = size
-  drawFn(c.getContext('2d'), size)
-  return c
-}
-function seededRandom(seed){
-  let s = seed
-  return function(){ s = (s*9301+49297)%233280; return s/233280 }
-}
-function buildPatterns(){
-  const asphaltTile = makeTile(12, (t,s)=>{
-    t.fillStyle = '#2c2c2c'; t.fillRect(0,0,s,s)
-    const r = seededRandom(7)
-    for(let i=0;i<20;i++){
-      const g = 55 + r()*70
-      t.fillStyle = `rgba(${g},${g},${g},0.55)`
-      t.fillRect(r()*s, r()*s, 1, 1)
-    }
-  })
-  const grassTile = makeTile(16, (t,s)=>{
-    t.fillStyle = '#4a7c3a'; t.fillRect(0,0,s,s)
-    const r = seededRandom(3)
-    for(let i=0;i<16;i++){
-      t.strokeStyle = r()>0.5 ? 'rgba(110,170,80,0.6)' : 'rgba(45,90,40,0.6)'
-      t.lineWidth = 1
-      const x=r()*s, y=r()*s
-      t.beginPath(); t.moveTo(x,y); t.lineTo(x+(r()*4-2), y-4); t.stroke()
-    }
-  })
-  const bushTile = makeTile(14, (t,s)=>{
-    t.fillStyle = '#2f5d34'; t.fillRect(0,0,s,s)
-    const r = seededRandom(11)
-    for(let i=0;i<14;i++){
-      t.fillStyle = `rgba(${40+r()*40},${95+r()*45},${45+r()*25},0.65)`
-      t.beginPath(); t.arc(r()*s, r()*s, 1.2+r()*1.6, 0, Math.PI*2); t.fill()
-    }
-  })
-  const pavementTile = makeTile(20, (t,s)=>{
-    t.fillStyle = '#b9b2a3'; t.fillRect(0,0,s,s)
-    t.strokeStyle = '#8f887a'; t.lineWidth = 1.4
-    t.strokeRect(0.5,0.5,s-1,s-1)
-    t.fillStyle = 'rgba(255,255,255,0.10)'
-    t.fillRect(1,1,s/2-1,s/2-1)
-    t.fillStyle = 'rgba(0,0,0,0.06)'
-    t.fillRect(s/2,s/2,s/2-1,s/2-1)
-  })
-  asphaltPattern  = ctx.createPattern(asphaltTile,'repeat')
-  grassPattern    = ctx.createPattern(grassTile,'repeat')
-  bushPattern     = ctx.createPattern(bushTile,'repeat')
-  pavementPattern = ctx.createPattern(pavementTile,'repeat')
-}
-
-/* ============================================================
-   OUTILS GÉOMÉTRIQUES
-   ============================================================ */
-function cp(p){ return map.latLngToContainerPoint(L.latLng(p.lat, p.lng)) }
-function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y) }
-function metersToPixels(m, lat){
-  const zoom = map.getZoom()
-  const mpp = 156543.03392 * Math.cos(lat*Math.PI/180) / Math.pow(2, zoom)
-  return m / mpp
-}
-function pathFromPoints(pts){
-  ctx.beginPath()
-  ctx.moveTo(pts[0].x, pts[0].y)
-  for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y)
-}
-/* Spline de Catmull-Rom (équivalente à des Bézier cubiques bout à bout) */
-function catmullRomSpline(pts, segmentsPerPiece, closed){
-  const n = pts.length
-  if(n < 3) return pts.slice()
-  const at = (i)=>{
-    if(closed) return pts[(i + n) % n]
-    return pts[Math.max(0, Math.min(n - 1, i))]
-  }
-  const out = []
-  const last = closed ? n : n - 1
-  for(let i = 0; i < last; i++){
-    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2)
-    for(let s = 0; s < segmentsPerPiece; s++){
-      const t = s / segmentsPerPiece
-      const t2 = t*t, t3 = t2*t
-      const x = 0.5*((2*p1.x) + (-p0.x+p2.x)*t + (2*p0.x-5*p1.x+4*p2.x-p3.x)*t2 + (-p0.x+3*p1.x-3*p2.x+p3.x)*t3)
-      const y = 0.5*((2*p1.y) + (-p0.y+p2.y)*t + (2*p0.y-5*p1.y+4*p2.y-p3.y)*t2 + (-p0.y+3*p1.y-3*p2.y+p3.y)*t3)
-      out.push({x, y})
-    }
-  }
-  out.push(closed ? at(0) : pts[n-1])
-  return out
-}
-function smoothIfNeeded(e, pts, closed){
-  if(e.smooth && pts.length > 2) return catmullRomSpline(pts, 12, !!closed)
-  return pts
-}
-function walkPath(pts, step, cb){
-  let d = 0, next = step/2
-  for(let i=0;i<pts.length-1;i++){
-    const a = pts[i], b = pts[i+1]
-    const segLen = Math.hypot(b.x-a.x, b.y-a.y)
-    while(next <= d+segLen){
-      const t = (next-d)/segLen
-      const x = a.x+(b.x-a.x)*t, y = a.y+(b.y-a.y)*t
-      cb({x,y}, Math.atan2(b.y-a.y, b.x-a.x))
-      next += step
-    }
-    d += segLen
-  }
-}
-function distToSegment(p,a,b){
-  const l2 = (b.x-a.x)**2+(b.y-a.y)**2
-  if(l2===0) return dist(p,a)
-  let t = ((p.x-a.x)*(b.x-a.x)+(p.y-a.y)*(b.y-a.y))/l2
-  t = Math.max(0, Math.min(1,t))
-  return dist(p, {x:a.x+t*(b.x-a.x), y:a.y+t*(b.y-a.y)})
-}
-function minDistToSegments(pts, p, closed){
-  let m = Infinity
-  const n = pts.length - (closed?0:1)
-  for(let i=0;i<n;i++) m = Math.min(m, distToSegment(p, pts[i], pts[(i+1)%pts.length]))
-  return m
-}
-function offsetPolyline(pts, offset){
-  const n = pts.length
-  const out = []
-  for(let i=0;i<n;i++){
-    let dx=0, dy=0
-    if(i>0){ dx += pts[i].x-pts[i-1].x; dy += pts[i].y-pts[i-1].y }
-    if(i<n-1){ dx += pts[i+1].x-pts[i].x; dy += pts[i+1].y-pts[i].y }
-    const len = Math.hypot(dx,dy) || 1
-    const nx = -dy/len, ny = dx/len
-    out.push({x: pts[i].x + nx*offset, y: pts[i].y + ny*offset})
-  }
-  return out
-}
-function pointInPolygon(p, pts){
-  let inside = false
-  for(let i=0, j=pts.length-1; i<pts.length; j=i++){
-    const xi=pts[i].x, yi=pts[i].y, xj=pts[j].x, yj=pts[j].y
-    const intersect = ((yi>p.y)!==(yj>p.y)) && (p.x < (xj-xi)*(p.y-yi)/(yj-yi)+xi)
-    if(intersect) inside = !inside
-  }
-  return inside
-}
-function offsetLatLng(base, dxMeters, dyMeters){
-  const R = 6378137
-  const dLat = (dyMeters / R) * (180/Math.PI)
-  const dLng = (dxMeters / (R*Math.cos(base.lat*Math.PI/180))) * (180/Math.PI)
-  return {lat: base.lat + dLat, lng: base.lng + dLng}
-}
-function circleLatLng(center, radiusMeters, segments){
-  const coords = []
-  for(let i=0; i<=segments; i++){
-    const a = (i/segments) * Math.PI * 2
-    coords.push(offsetLatLng(center, radiusMeters*Math.cos(a), radiusMeters*Math.sin(a)))
-  }
-  return coords
-}
-function makeSquareIsland(center, dirDeg, distance, size){
-  const rad = dirDeg*Math.PI/180
-  const ux = Math.cos(rad), uy = Math.sin(rad)
-  const px = -uy, py = ux
-  const islandCenter = offsetLatLng(center, ux*distance, uy*distance)
-  const half = size/2
-  return [
-    offsetLatLng(islandCenter, -ux*half - px*half, -uy*half - py*half),
-    offsetLatLng(islandCenter,  ux*half - px*half,  uy*half - py*half),
-    offsetLatLng(islandCenter,  ux*half + px*half,  uy*half + py*half),
-    offsetLatLng(islandCenter, -ux*half + px*half, -uy*half + py*half)
-  ]
-}
-function makeCrossing(center, dirDeg, distance, span){
-  const rad = dirDeg*Math.PI/180
-  const ux = Math.cos(rad), uy = Math.sin(rad)
-  const px = -uy, py = ux
-  const c = offsetLatLng(center, ux*distance, uy*distance)
-  return [
-    offsetLatLng(c,  px*span/2,  py*span/2),
-    offsetLatLng(c, -px*span/2, -py*span/2)
-  ]
-}
 
 /* ============================================================
    RENDU
@@ -1458,7 +1297,6 @@ function onMapDblClick(){
 }
 
 function onKeyDown(ev){
-  // Ne pas intercepter Entrée/Échap quand on tape dans un champ
   const tag = ev.target && ev.target.tagName
   if(tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
   if(ev.key === 'Enter') finalizeDrawing()
@@ -1470,7 +1308,6 @@ function onWindowResize(){ if(map) map.invalidateSize() }
 /* ============================================================
    CYCLE DE VIE VUE
    ============================================================ */
-const sidebarCleanups = []
 
 onMounted(()=>{
   map = L.map(mapEl.value, {
@@ -1487,8 +1324,11 @@ onMounted(()=>{
   overlay.className = 'up-overlay-canvas'
   map.getContainer().appendChild(overlay)
   ctx = overlay.getContext('2d')
-  buildPatterns()
+  initGeometry({ map, ctx })
 
+  const patterns = buildPatterns(ctx);
+  ({ asphaltPattern, grassPattern, bushPattern, pavementPattern } = patterns);
+  
   map.on('resize', resizeOverlay)
   map.on('move', draw)
   map.on('moveend', draw)
@@ -1503,7 +1343,6 @@ onMounted(()=>{
   window.addEventListener('resize', onWindowResize)
   document.addEventListener('keydown', onKeyDown)
 
-  // Boutons d'outils
   root.value.querySelectorAll('.tool-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       selectTool(currentTool === btn.dataset.tool ? null : btn.dataset.tool)
