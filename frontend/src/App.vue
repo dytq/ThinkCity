@@ -105,8 +105,8 @@
   </div>
 </template>
 
-<script setup>
-import { ref, computed, onMounted,reactive, onBeforeUnmount } from 'vue'
+<script setup lang="ts">
+import { ref, computed, onMounted, reactive, onBeforeUnmount } from 'vue'
 
 import {
   initGeometry,
@@ -115,31 +115,77 @@ import {
   minDistToSegments,
   pointInPolygon,
 } from "./geometry.js";
+import type { LatLngLike } from "./geometry.js";
 
 import {
   initRender,
   resizeOverlay,
   draw
 } from "./render.js";
+import type { MapElement, ElementType, Direction } from "./render.js";
 
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
+/* ============================================================
+   TYPES LOCAUX
+   ============================================================ */
+interface DrawnElement extends MapElement {
+  id: number
+}
+
+type ToolMode = 'line' | 'polygon' | 'point' | 'twopoint' | 'edit' | 'branch'
+
+interface ToolConfig {
+  label: string
+  mode: ToolMode
+  minPoints: number
+}
+
+interface ToolInfo {
+  id: string
+  icon: string
+  label: string
+  cls?: string
+}
+
+interface Category {
+  id: string
+  icon: string
+  label: string
+  tools: ToolInfo[]
+}
+
+type SettingValue = string | number | boolean
+
+interface Field {
+  id: string
+  label: string
+  type: 'number' | 'color' | 'checkbox' | 'select'
+  def: SettingValue
+  min?: number
+  max?: number
+  step?: number
+  // (string | null)[] : le template appelle f.tools.includes(uiTool) avec uiTool nullable
+  tools: readonly (string | null)[]
+  options?: [string, string][]
+}
+
 const TILE_URL = 'https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'
-const TILE_OPTS = { maxZoom: 21, maxNativeZoom: 21, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], attribution: 'Imagerie &copy; Google' }
+const TILE_OPTS: L.TileLayerOptions = { maxZoom: 21, maxNativeZoom: 21, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], attribution: 'Imagerie &copy; Google' }
 
-const root = ref(null)
-const mapEl = ref(null)
+const root = ref<HTMLElement | null>(null)
+const mapEl = ref<HTMLElement | null>(null)
 
-let map = null
-let overlay = null
-let ctx = null
+let map: L.Map | null = null
+let overlay: HTMLCanvasElement | null = null
+let ctx: CanvasRenderingContext2D | null = null
 
 /* ============================================================
    ÉTAT RÉACTIF (UI uniquement)
    ============================================================ */
-const uiTool = ref(null)            // outil actif (miroir de currentTool)
-const activeCat = ref('voirie')     // catégorie ouverte dans le dock
+const uiTool = ref<string | null>(null)   // outil actif (miroir de currentTool)
+const activeCat = ref('voirie')           // catégorie ouverte dans le dock
 const showLegend = ref(false)
 const statusHtml = ref('')
 const hasSelection = ref(false)
@@ -149,7 +195,7 @@ const selectedType = ref('')
 /* ============================================================
    CATÉGORIES DU DOCK (mêmes icônes qu'avant)
    ============================================================ */
-const categories = [
+const categories: Category[] = [
   { id: 'voirie', icon: '🛣️', label: 'Voirie', tools: [
     { id: 'route',         icon: '🛣️', label: 'Route' },
     { id: 'rond_point',    icon: '⭕', label: 'Rond-point' },
@@ -186,11 +232,13 @@ const categories = [
   ]},
 ]
 
-const toolsById = {}
+const toolsById: Record<string, ToolInfo & { cat: string }> = {}
 categories.forEach(c => c.tools.forEach(t => { toolsById[t.id] = { ...t, cat: c.id } }))
 
 const currentCategory = computed(() => categories.find(c => c.id === activeCat.value) || categories[0])
-const activeToolInfo = computed(() => toolsById[uiTool.value] || { icon: '', label: '' })
+const activeToolInfo = computed<{ icon: string; label: string }>(
+  () => (uiTool.value && toolsById[uiTool.value]) || { icon: '', label: '' }
+)
 
 /* ============================================================
    PROPRIÉTÉS PAR TYPE
@@ -201,7 +249,7 @@ const ROUTE_TOOLS = ['route', 'branch']
 const SMOOTH_TOOLS = ['route', 'branch', 'piste_cyclable', 'chemin_pieton', 'bande_cyclable', 'rue_cyclable', 'stationnement']
 const CYCLE_TOOLS = ['piste_cyclable', 'bande_cyclable']
 
-const settingsValues = reactive({
+const settingsValues = reactive<Record<string, SettingValue>>({
   'set-smooth-curves': false,
   'set-route-width': 6,
   'set-route-lanes': 2,
@@ -224,7 +272,7 @@ const settingsValues = reactive({
   'set-tree-radius': 2.2
 })
 
-const fields = [
+const fields: Field[] = [
   // Commun aux tracés
   { id: 'set-smooth-curves', label: 'Lissage des tracés (courbes de Bézier)', type: 'checkbox', def: false, tools: SMOOTH_TOOLS },
 
@@ -280,16 +328,16 @@ const hasFieldsForTool = computed(() => fields.some(f => f.tools.includes(uiTool
 /* ============================================================
    DONNÉES & ÉTAT (moteur de dessin)
    ============================================================ */
-let elements = []
+let elements: DrawnElement[] = []
 let idCounter = 1
-let currentTool = null
-let drawingPoints = []
-let mousePos = null
-let selectedElementForEdit = null
-let draggedVertexIndex = null
-let branchSourceNode = null
+let currentTool: string | null = null
+let drawingPoints: LatLngLike[] = []
+let mousePos: LatLngLike | null = null
+let selectedElementForEdit: DrawnElement | null = null
+let draggedVertexIndex: number | null = null
+let branchSourceNode: LatLngLike | null = null
 
-const toolConfig = {
+const toolConfig: Record<string, ToolConfig> = {
   route:           {label:'Route',            mode:'line',    minPoints:2},
   piste_cyclable:  {label:'Piste cycl.',      mode:'line',    minPoints:2},
   chemin_pieton:   {label:'Chemin piéton',    mode:'line',    minPoints:2},
@@ -313,7 +361,7 @@ const toolConfig = {
   branch:          {label:'Branche',          mode:'branch',  minPoints:1}
 }
 
-const instructions = {
+const instructions: Record<string, string> = {
   route:          'Cliquez pour placer les points de la route. Validez avec Entrée (ou double-clic).',
   piste_cyclable: 'Cliquez pour tracer la piste cyclable. Validez avec Entrée.',
   chemin_pieton:  'Cliquez pour tracer le chemin piéton (dallage). Validez avec Entrée.',
@@ -338,7 +386,7 @@ const instructions = {
   delete:         'Cliquez sur un élément existant pour le supprimer.'
 }
 
-const zOrderBase = {
+const zOrderBase: Record<ElementType, number> = {
   route: 0,
   espace_vert: 1,
   massif: 2,
@@ -367,16 +415,18 @@ const zOrderBase = {
 /* ============================================================
    ACCÈS AU DOM (limité au composant)
    ============================================================ */
-function byId(id){ return root.value.querySelector('#' + id) }
+function byId(id: string): HTMLInputElement {
+  return root.value!.querySelector<HTMLInputElement>('#' + id)!
+}
 
 /* ============================================================
    ANIMATION DES FEUX CLIGNOTANTS
    ============================================================ */
 let blinkState = true
-let blinkAnimationId = null
-let blinkTimeoutId = null
+let blinkAnimationId: number | null = null
+let blinkTimeoutId: ReturnType<typeof setTimeout> | null = null
 
-function animateBlinkingLights() {
+function animateBlinkingLights(): void {
   blinkState = !blinkState
   draw()
   blinkAnimationId = requestAnimationFrame(() => {
@@ -387,7 +437,7 @@ function animateBlinkingLights() {
 /* ============================================================
    SÉLECTION (synchronise l'état réactif de l'UI)
    ============================================================ */
-function setSelected(el){
+function setSelected(el: DrawnElement | null): void {
   selectedElementForEdit = el
   hasSelection.value = !!el
   if(el){
@@ -397,9 +447,9 @@ function setSelected(el){
   }
 }
 
-function onZInput(e){
+function onZInput(e: Event): void {
   if(selectedElementForEdit){
-    selectedElementForEdit.z = parseInt(e.target.value) || 0
+    selectedElementForEdit.z = parseInt((e.target as HTMLInputElement).value) || 0
     selectedZ.value = selectedElementForEdit.z
     draw()
   }
@@ -408,80 +458,84 @@ function onZInput(e){
 /* ============================================================
    OUTILS / INTERACTIONS
    ============================================================ */
-function readSettingsForType(type){
+const num = (id: string): number => settingsValues[id] as number
+const str = (id: string): string => settingsValues[id] as string
+const bool = (id: string): boolean => settingsValues[id] as boolean
+
+function readSettingsForType(type: ElementType): Partial<MapElement> {
   switch(type){
     case 'route': return {
-      width: settingsValues['set-route-width'],
-      lanes: settingsValues['set-route-lanes'],
-      direction: settingsValues['set-route-direction'],
-      lineCap: settingsValues['set-route-linecap'],
-      smooth: settingsValues['set-smooth-curves']
+      width: num('set-route-width'),
+      lanes: num('set-route-lanes'),
+      direction: str('set-route-direction') as Direction,
+      lineCap: str('set-route-linecap') as CanvasLineCap,
+      smooth: bool('set-smooth-curves')
     }
     case 'piste_cyclable': return {
-      width: settingsValues['set-cycle-width'],
-      color: settingsValues['set-cycle-color'],
-      direction: settingsValues['set-cycle-direction'],
-      smooth: settingsValues['set-smooth-curves']
+      width: num('set-cycle-width'),
+      color: str('set-cycle-color'),
+      direction: str('set-cycle-direction') as Direction,
+      smooth: bool('set-smooth-curves')
     }
     case 'chemin_pieton': return {
-      width: settingsValues['set-ped-width'],
-      smooth: settingsValues['set-smooth-curves']
+      width: num('set-ped-width'),
+      smooth: bool('set-smooth-curves')
     }
     case 'bande_cyclable': return {
-      width: settingsValues['set-cycle-width'],
-      color: settingsValues['set-cycle-color'],
-      direction: settingsValues['set-cycle-direction'],
-      smooth: settingsValues['set-smooth-curves']
+      width: num('set-cycle-width'),
+      color: str('set-cycle-color'),
+      direction: str('set-cycle-direction') as Direction,
+      smooth: bool('set-smooth-curves')
     }
-    case 'rue_cyclable': return { smooth: settingsValues['set-smooth-curves'] }
-    case 'fleche_sol': return { arrowType: settingsValues['set-arrow-type'] }
+    case 'rue_cyclable': return { smooth: bool('set-smooth-curves') }
+    case 'fleche_sol': return { arrowType: str('set-arrow-type') as MapElement['arrowType'] }
     case 'rond_point': return {
-      radius: settingsValues['set-roundabout-radius'],
-      lanes: settingsValues['set-roundabout-lanes']
+      radius: num('set-roundabout-radius'),
+      lanes: num('set-roundabout-lanes')
     }
     case 'hachures': return {
-      hatchWidth: settingsValues['set-hatch-width'],
-      cornerStyle: settingsValues['set-hatch-style']
+      hatchWidth: num('set-hatch-width'),
+      cornerStyle: str('set-hatch-style') as MapElement['cornerStyle']
     }
     case 'stationnement': return {
-      layout: settingsValues['set-park-layout'],
-      bay: settingsValues['set-park-bay'],
-      depth: settingsValues['set-park-depth'],
-      smooth: settingsValues['set-smooth-curves']
+      layout: str('set-park-layout') as MapElement['layout'],
+      bay: num('set-park-bay'),
+      depth: num('set-park-depth'),
+      smooth: bool('set-smooth-curves')
     }
     case 'passage_pieton': return {
-      span: settingsValues['set-cross-span'],
-      stripeWidth: settingsValues['set-cross-stripe']
+      span: num('set-cross-span'),
+      stripeWidth: num('set-cross-stripe')
     }
-    case 'arbre': return { radius: settingsValues['set-tree-radius'] }
+    case 'arbre': return { radius: num('set-tree-radius') }
     default: return {}
   }
 }
 
-function addElement(type, coords){
+function addElement(type: ElementType, coords: LatLngLike[]): void {
   const settings = readSettingsForType(type)
   const zVal = zOrderBase[type] !== undefined ? zOrderBase[type] : 0
   elements.push(Object.assign({id: idCounter++, type, coords, z: zVal}, settings))
   draw()
 }
 
-function onToolClick(id){
+function onToolClick(id: string): void {
   selectTool(currentTool === id ? null : id)
 }
 
-function selectTool(name){
+function selectTool(name: string | null): void {
   currentTool = name
   uiTool.value = name
   drawingPoints = []
   if(name && toolsById[name]) activeCat.value = toolsById[name].cat
   if(name !== 'edit'){ setSelected(null) }
   if(name !== 'branch'){ branchSourceNode = null }
-  map.getContainer().style.cursor = name ? 'crosshair' : ''
+  if(map) map.getContainer().style.cursor = name ? 'crosshair' : ''
   updateStatus()
   draw()
 }
 
-function updateStatus(){
+function updateStatus(): void {
   if(!currentTool){ statusHtml.value = 'Choisissez une catégorie, puis un équipement ou un marquage dans le dock.'; return }
   let txt = instructions[currentTool] || ''
   if(currentTool === 'edit' && selectedElementForEdit){
@@ -494,7 +548,8 @@ function updateStatus(){
   statusHtml.value = txt
 }
 
-function finalizeDrawing(){
+function finalizeDrawing(): void {
+  if(!currentTool) return
   const cfg = toolConfig[currentTool]
   if(!cfg || cfg.mode==='point' || cfg.mode==='edit') return
   // retire le dernier point lors d'un double-clic
@@ -505,7 +560,7 @@ function finalizeDrawing(){
     cancelDrawing()
     return
   }
-  const targetType = (currentTool === 'branch') ? 'route' : currentTool
+  const targetType = (currentTool === 'branch' ? 'route' : currentTool) as ElementType
   addElement(targetType, drawingPoints.slice())
   drawingPoints = []
   branchSourceNode = null
@@ -513,7 +568,7 @@ function finalizeDrawing(){
   draw()
 }
 
-function cancelDrawing(){
+function cancelDrawing(): void {
   drawingPoints = []
   setSelected(null)
   branchSourceNode = null
@@ -521,7 +576,7 @@ function cancelDrawing(){
   draw()
 }
 
-function clearAll(){
+function clearAll(): void {
   if(elements.length===0) return
   if(confirm('Effacer tous les éléments du projet ? Cette action est irréversible.')){
     elements = []
@@ -532,11 +587,12 @@ function clearAll(){
 }
 
 /* Trouve l'élément le plus proche d'un point écran (factorisé : edit + delete) */
-function findNearestElement(containerPoint){
-  let best = null, bestDist = 20
-  elements.forEach(e=>{
+function findNearestElement(containerPoint: L.Point): DrawnElement | null {
+  let best: DrawnElement | null = null
+  let bestDist = 20
+  for(const e of elements){
     const pts = e.coords.map(cp)
-    let d
+    let d: number
     if(['arbre', 'feu_tricolore', 'feu_clignotant', 'rond_point'].includes(e.type)){
       d = dist(pts[0], containerPoint)
     } else if(['espace_vert', 'massif', 'hachures'].includes(e.type)){
@@ -545,11 +601,11 @@ function findNearestElement(containerPoint){
       d = minDistToSegments(pts, containerPoint, false)
     }
     if(d < bestDist){ bestDist = d; best = e }
-  })
+  }
   return best
 }
 
-function deleteNearElement(containerPoint){
+function deleteNearElement(containerPoint: L.Point): void {
   const best = findNearestElement(containerPoint)
   if(best){
     elements = elements.filter(e=>e!==best)
@@ -558,7 +614,7 @@ function deleteNearElement(containerPoint){
   }
 }
 
-function onMapClick(ev){
+function onMapClick(ev: L.LeafletMouseEvent): void {
   if(!currentTool) return
   if(currentTool==='delete'){ deleteNearElement(ev.containerPoint); return }
 
@@ -572,14 +628,14 @@ function onMapClick(ev){
   if(currentTool==='branch'){
     const cpPoint = ev.containerPoint
     if(!branchSourceNode){
-      let foundNode = null
-      elements.forEach(e=>{
+      let foundNode: LatLngLike | null = null
+      for(const e of elements){
         if(['route', 'piste_cyclable', 'chemin_pieton'].includes(e.type)){
-          e.coords.forEach(coord=>{
+          for(const coord of e.coords){
             if(dist(cp(coord), cpPoint) < 12) foundNode = coord
-          })
+          }
         }
-      })
+      }
       if(foundNode){
         branchSourceNode = foundNode
         drawingPoints = [foundNode]
@@ -596,10 +652,10 @@ function onMapClick(ev){
   }
 
   const cfg = toolConfig[currentTool]
-  const p = {lat: ev.latlng.lat, lng: ev.latlng.lng}
+  const p: LatLngLike = {lat: ev.latlng.lat, lng: ev.latlng.lng}
 
   if(cfg.mode==='point'){
-    addElement(currentTool, [p])
+    addElement(currentTool as ElementType, [p])
     return
   }
 
@@ -611,16 +667,16 @@ function onMapClick(ev){
   draw()
 }
 
-function onMapMouseDown(ev){
+function onMapMouseDown(ev: L.LeafletMouseEvent): void {
   if(currentTool !== 'edit' || !selectedElementForEdit) return
   const idx = selectedElementForEdit.coords.findIndex(c=> dist(cp(c), ev.containerPoint) < 12)
   if(idx !== -1){
     draggedVertexIndex = idx
-    map.dragging.disable()
+    map?.dragging.disable()
   }
 }
 
-function onMapMouseMove(ev){
+function onMapMouseMove(ev: L.LeafletMouseEvent): void {
   mousePos = {lat: ev.latlng.lat, lng: ev.latlng.lng}
   if(currentTool === 'edit' && selectedElementForEdit && draggedVertexIndex !== null){
     selectedElementForEdit.coords[draggedVertexIndex] = {lat: ev.latlng.lat, lng: ev.latlng.lng}
@@ -629,54 +685,58 @@ function onMapMouseMove(ev){
   if(drawingPoints.length>0) draw()
 }
 
-function onMapMouseUp(){
+function onMapMouseUp(): void {
   if(draggedVertexIndex !== null){
     draggedVertexIndex = null
-    map.dragging.enable()
+    map?.dragging.enable()
     draw()
   }
 }
 
-function onMapDblClick(){
+function onMapDblClick(): void {
   if(currentTool && toolConfig[currentTool] && ['line', 'polygon', 'branch'].includes(toolConfig[currentTool].mode)){
     finalizeDrawing()
   }
 }
 
-function onKeyDown(ev){
-  const tag = ev.target && ev.target.tagName
+function onKeyDown(ev: KeyboardEvent): void {
+  const tag = (ev.target as HTMLElement | null)?.tagName
   if(tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
   if(ev.key === 'Enter') finalizeDrawing()
   if(ev.key === 'Escape') cancelDrawing()
 }
 
-function onWindowResize(){ if(map) map.invalidateSize() }
+function onWindowResize(): void { if(map) map.invalidateSize() }
 
 /* ============================================================
    CYCLE DE VIE VUE
    ============================================================ */
 onMounted(()=>{
-  map = L.map(mapEl.value, {
+  const leafletMap = L.map(mapEl.value!, {
     doubleClickZoom: false,
     zoomControl: true,
     center: [48.8566, 2.3522],
     zoom: 19,
     maxZoom: 21
   })
-  L.tileLayer(TILE_URL, TILE_OPTS).addTo(map)
+  map = leafletMap
+  L.tileLayer(TILE_URL, TILE_OPTS).addTo(leafletMap)
   // échelle à droite pour ne pas passer sous le dock centré
-  L.control.scale({metric:true, imperial:false, position:'bottomright'}).addTo(map)
+  L.control.scale({metric:true, imperial:false, position:'bottomright'}).addTo(leafletMap)
 
-  overlay = document.createElement('canvas')
-  overlay.className = 'up-overlay-canvas'
-  map.getContainer().appendChild(overlay)
-  ctx = overlay.getContext('2d')
-  initGeometry({ map, ctx })
+  const overlayEl = document.createElement('canvas')
+  overlayEl.className = 'up-overlay-canvas'
+  leafletMap.getContainer().appendChild(overlayEl)
+  const context = overlayEl.getContext('2d')
+  if(!context) throw new Error('Impossible de créer le contexte 2D du canvas')
+  overlay = overlayEl
+  ctx = context
+  initGeometry({ map: leafletMap, ctx: context })
 
   initRender({
-    overlay,
-    map,
-    ctx,
+    overlay: overlayEl,
+    map: leafletMap,
+    ctx: context,
     getState: () => ({
       drawingPoints,
       elements,
@@ -684,29 +744,28 @@ onMounted(()=>{
       currentTool,
       toolConfig,
       mousePos,
-      byId,
-      cp
+      byId
     })
   })
 
   animateBlinkingLights()
 
-  map.on('resize', resizeOverlay)
-  map.on('move', draw)
-  map.on('moveend', draw)
-  map.on('zoomstart', ()=>{ overlay.style.opacity = 0 })
-  map.on('zoomend', ()=>{ overlay.style.opacity = 1; draw() })
-  map.on('click', onMapClick)
-  map.on('mousedown', onMapMouseDown)
-  map.on('mousemove', onMapMouseMove)
-  map.on('mouseup', onMapMouseUp)
-  map.on('dblclick', onMapDblClick)
+  leafletMap.on('resize', resizeOverlay)
+  leafletMap.on('move', draw)
+  leafletMap.on('moveend', draw)
+  leafletMap.on('zoomstart', ()=>{ overlayEl.style.opacity = '0' })
+  leafletMap.on('zoomend', ()=>{ overlayEl.style.opacity = '1'; draw() })
+  leafletMap.on('click', onMapClick)
+  leafletMap.on('mousedown', onMapMouseDown)
+  leafletMap.on('mousemove', onMapMouseMove)
+  leafletMap.on('mouseup', onMapMouseUp)
+  leafletMap.on('dblclick', onMapDblClick)
 
   window.addEventListener('resize', onWindowResize)
   document.addEventListener('keydown', onKeyDown)
 
   updateStatus()
-  map.whenReady(resizeOverlay)
+  leafletMap.whenReady(resizeOverlay)
   setTimeout(resizeOverlay, 200)
 })
 
