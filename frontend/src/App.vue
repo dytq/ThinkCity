@@ -235,7 +235,9 @@ const categories: Category[] = [
 const toolsById: Record<string, ToolInfo & { cat: string }> = {}
 categories.forEach(c => c.tools.forEach(t => { toolsById[t.id] = { ...t, cat: c.id } }))
 
-const currentCategory = computed(() => categories.find(c => c.id === activeCat.value) || categories[0])
+const currentCategory = computed<Category>(
+  () => categories.find(c => c.id === activeCat.value) ?? categories[0]!
+)
 const activeToolInfo = computed<{ icon: string; label: string }>(
   () => (uiTool.value && toolsById[uiTool.value]) || { icon: '', label: '' }
 )
@@ -443,7 +445,7 @@ function setSelected(el: DrawnElement | null): void {
   if(el){
     if(el.z === undefined) el.z = zOrderBase[el.type] || 0
     selectedZ.value = el.z
-    selectedType.value = (toolsById[el.type] && toolsById[el.type].label) || el.type
+    selectedType.value = toolsById[el.type]?.label ?? el.type
   }
 }
 
@@ -542,7 +544,7 @@ function updateStatus(): void {
     txt = `Élément sélectionné (Type: ${selectedElementForEdit.type}, Z: ${selectedElementForEdit.z}). Glissez une poignée ou ajustez la valeur Z dans le panneau.`
   } else if(currentTool === 'branch' && branchSourceNode){
     txt = 'Nœud de départ sélectionné. Cliquez sur la carte pour tracer la nouvelle branche. Validez avec Entrée.'
-  } else if(drawingPoints.length>0 && toolConfig[currentTool] && toolConfig[currentTool].mode!=='point'){
+  } else if(  drawingPoints.length > 0 && toolConfig[currentTool]?.mode !== 'point' && toolConfig[currentTool] !== undefined){
     txt += ` <strong>${drawingPoints.length}</strong> point(s) placé(s).`
   }
   statusHtml.value = txt
@@ -590,17 +592,25 @@ function clearAll(): void {
 function findNearestElement(containerPoint: L.Point): DrawnElement | null {
   let best: DrawnElement | null = null
   let bestDist = 20
-  for(const e of elements){
+
+  for (const e of elements) {
     const pts = e.coords.map(cp)
     let d: number
-    if(['arbre', 'feu_tricolore', 'feu_clignotant', 'rond_point'].includes(e.type)){
-      d = dist(pts[0], containerPoint)
-    } else if(['espace_vert', 'massif', 'hachures'].includes(e.type)){
-      d = pointInPolygon(containerPoint, pts) ? 0 : minDistToSegments(pts, containerPoint, true)
+    if (['arbre', 'feu_tricolore', 'feu_clignotant', 'rond_point'].includes(e.type)) {
+      const first = pts[0]
+      if (!first) continue
+      d = dist(first, containerPoint)
+    } else if (['espace_vert', 'massif', 'hachures'].includes(e.type)) {
+      d = pointInPolygon(containerPoint, pts)
+        ? 0
+        : minDistToSegments(pts, containerPoint, true)
     } else {
       d = minDistToSegments(pts, containerPoint, false)
     }
-    if(d < bestDist){ bestDist = d; best = e }
+    if (d < bestDist) {
+      bestDist = d
+      best = e
+    }
   }
   return best
 }
@@ -654,6 +664,8 @@ function onMapClick(ev: L.LeafletMouseEvent): void {
   const cfg = toolConfig[currentTool]
   const p: LatLngLike = {lat: ev.latlng.lat, lng: ev.latlng.lng}
 
+  if (!cfg) return
+
   if(cfg.mode==='point'){
     addElement(currentTool as ElementType, [p])
     return
@@ -694,7 +706,7 @@ function onMapMouseUp(): void {
 }
 
 function onMapDblClick(): void {
-  if(currentTool && toolConfig[currentTool] && ['line', 'polygon', 'branch'].includes(toolConfig[currentTool].mode)){
+  if (currentTool && ['line', 'polygon', 'branch'].includes(toolConfig[currentTool]?.mode ?? '')) {
     finalizeDrawing()
   }
 }

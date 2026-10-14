@@ -1,16 +1,49 @@
-function seededRandom(seed){
-  let s = seed
-  return function(){ s = (s*9301+49297)%233280; return s/233280 }
+export interface Patterns {
+  asphaltPattern: CanvasPattern
+  grassPattern: CanvasPattern
+  bushPattern: CanvasPattern
+  pavementPattern: CanvasPattern
 }
 
-function makeTile(size, drawFn){
+function seededRandom(seed: number): () => number {
+  let s = seed
+  return function () {
+    s = (s * 9301 + 49297) % 233280
+    return s / 233280
+  }
+}
+
+function makeTile(
+  size: number,
+  drawFn: (ctx: CanvasRenderingContext2D, size: number) => void
+): HTMLCanvasElement {
   const c = document.createElement('canvas')
-  c.width = size; c.height = size
-  drawFn(c.getContext('2d'), size)
+  c.width = size
+  c.height = size
+
+  const tileCtx = c.getContext('2d')
+  if (!tileCtx) {
+    throw new Error('Impossible de créer le contexte 2D de la tuile')
+  }
+
+  drawFn(tileCtx, size)
   return c
 }
 
-function buildPatterns(ctx) {
+/** createPattern() peut renvoyer null : on le transforme en erreur explicite. */
+function requirePattern(
+  ctx: CanvasRenderingContext2D,
+  tile: HTMLCanvasElement,
+  name: string
+): CanvasPattern {
+  const pattern = ctx.createPattern(tile, 'repeat')
+  if (!pattern) {
+    throw new Error(`Échec de création de la texture : ${name}`)
+  }
+  return pattern
+}
+
+function buildPatterns(ctx: CanvasRenderingContext2D): Patterns {
   if (!ctx) {
     throw new Error('Contexte Canvas principal manquant')
   }
@@ -78,22 +111,12 @@ function buildPatterns(ctx) {
     t.fillRect(s / 2, s / 2, s / 2 - 1, s / 2 - 1)
   })
 
-  const patterns = {
-    asphaltPattern: ctx.createPattern(asphaltTile, 'repeat'),
-    grassPattern: ctx.createPattern(grassTile, 'repeat'),
-    bushPattern: ctx.createPattern(bushTile, 'repeat'),
-    pavementPattern: ctx.createPattern(pavementTile, 'repeat')
+  return {
+    asphaltPattern: requirePattern(ctx, asphaltTile, 'asphaltPattern'),
+    grassPattern: requirePattern(ctx, grassTile, 'grassPattern'),
+    bushPattern: requirePattern(ctx, bushTile, 'bushPattern'),
+    pavementPattern: requirePattern(ctx, pavementTile, 'pavementPattern'),
   }
-
-  for (const [name, pattern] of Object.entries(patterns)) {
-    if (!pattern) {
-      throw new Error(`Échec de création de la texture : ${name}`)
-    }
-  }
-
-  return patterns
 }
 
-export {
-  buildPatterns
-};
+export { buildPatterns }

@@ -11,7 +11,7 @@ import {
 } from "./geometry.js"
 import type { Pt, LatLngLike } from "./geometry.js"
 
-import { buildPatterns } from "./texture.js"
+import { buildPatterns } from "./texture.ts"
 
 /* ------------------------------------------------------------------ */
 /* Types                                                              */
@@ -228,8 +228,11 @@ function draw(): void {
 /* ------------------------------------------------------------------ */
 
 function drawBlinkingLight(e: MapElement): void {
-  const p = cp(e.coords[0])
-
+  const coord = e.coords[0]
+  if (!coord) return
+  
+  const p = cp(coord)
+  
   const isBlinkingOn = Math.floor(Date.now() / 400) % 2 === 0
 
   ctxRef.save()
@@ -310,7 +313,9 @@ function drawRoad(e: MapElement): void {
   let pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   pts = smoothIfNeeded(e, pts, false)
-  const lat = e.coords[0].lat
+  const coord = e.coords[0]
+  if (!coord) return
+  const lat = coord.lat
   const lanes = Math.max(1, Math.round(e.lanes || 2))
   const bidirectional = e.direction !== "unidirectional"
   const widthPx = Math.max(4, metersToPixels(e.width || 6, lat))
@@ -337,17 +342,26 @@ function drawRoad(e: MapElement): void {
 
   let centerIdx = -1
   if (bidirectional && dividerFracs.length > 0) {
-    centerIdx = dividerFracs.reduce(
-      (best, val, idx) => (Math.abs(val) < Math.abs(dividerFracs[best]) ? idx : best),
-      0
-    )
+    centerIdx = dividerFracs.reduce((best, val, idx) => {
+      const bestVal = dividerFracs[best]
+
+      if (bestVal === undefined) return idx
+
+      return Math.abs(val) < Math.abs(bestVal) ? idx : best
+    }, 0)
   }
 
   dividerFracs.forEach((frac, idx) => {
     const offsetPts = offsetPolyline(pts, frac * widthPx)
     ctxRef.beginPath()
-    ctxRef.moveTo(offsetPts[0].x, offsetPts[0].y)
-    for (let k = 1; k < offsetPts.length; k++) ctxRef.lineTo(offsetPts[k].x, offsetPts[k].y)
+    const offsetPtsFirst = offsetPts[0]
+    if (!offsetPtsFirst) return
+    ctxRef.moveTo(offsetPtsFirst.x, offsetPtsFirst.y)
+    for (let k = 1; k < offsetPts.length; k++) {
+      const offsetPtsK = offsetPts[k]
+      if (!offsetPtsK) continue;
+      ctxRef.lineTo(offsetPtsK.x, offsetPtsK.y)
+    }
     if (idx === centerIdx) {
       ctxRef.setLineDash([])
       ctxRef.strokeStyle = "#ffffff"
@@ -401,8 +415,10 @@ function drawArrowIcon(p: Pt, angle: number, size: number): void {
 }
 
 function drawRoundabout(e: MapElement): void {
-  const p = cp(e.coords[0])
-  const lat = e.coords[0].lat
+  const coord = e.coords[0]
+  if (!coord) return
+  const p = cp(coord)
+  const lat = coord.lat
   const r = Math.max(10, metersToPixels(e.radius || 12, lat))
   const lanes = Math.max(1, Math.round(e.lanes || 2))
   const ringWidth = r * (0.3 + lanes * 0.1)
@@ -457,7 +473,9 @@ function drawRoundabout(e: MapElement): void {
 function drawHatchZone(e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 3) return
-  const lat = e.coords[0].lat
+  const coord = e.coords[0]
+  if (!coord) return
+  const lat = coord.lat
   const hatchSpacing = Math.max(8, metersToPixels(e.hatchWidth || 1.5, lat))
   const cornerStyle: CornerStyle = e.cornerStyle || "straight"
 
@@ -467,9 +485,13 @@ function drawHatchZone(e: MapElement): void {
     drawSmoothPolygon(pts)
   } else {
     ctxRef.beginPath()
-    ctxRef.moveTo(pts[0].x, pts[0].y)
+    const pt = pts[0]
+    if (!pt) return
+    ctxRef.moveTo(pt.x, pt.y)
     for (let i = 1; i < pts.length; i++) {
-      ctxRef.lineTo(pts[i].x, pts[i].y)
+      const ptI = pts[i]
+      if (!ptI) continue;  
+      ctxRef.lineTo(ptI.x, ptI.y)
     }
     ctxRef.closePath()
   }
@@ -512,7 +534,9 @@ function drawCyclePath(e: MapElement): void {
   let pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   pts = smoothIfNeeded(e, pts, false)
-  const lat = e.coords[0].lat
+  const coord = e.coords[0]
+  if (!coord) return
+  const lat = coord.lat
   const widthPx = Math.max(3, metersToPixels(e.width || 2, lat))
   const bidirectional = e.direction === "bidirectional"
   ctxRef.save()
@@ -582,7 +606,9 @@ function drawPaintedCycleLane(e: MapElement): void {
   let pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   pts = smoothIfNeeded(e, pts, false)
-  const lat = e.coords[0].lat
+  const coord = e.coords[0]
+  if (!coord) return
+  const lat = coord.lat
   const widthPx = Math.max(6, metersToPixels(e.width || 1.5, lat))
   const bidirectional = e.direction === "bidirectional"
   ctxRef.save()
@@ -599,8 +625,14 @@ function drawPaintedCycleLane(e: MapElement): void {
   ;[widthPx / 2, -widthPx / 2].forEach((off) => {
     const edge = offsetPolyline(pts, off)
     ctxRef.beginPath()
-    ctxRef.moveTo(edge[0].x, edge[0].y)
-    for (let k = 1; k < edge.length; k++) ctxRef.lineTo(edge[k].x, edge[k].y)
+    const edgeFirst = edge[0]
+    if (!edgeFirst) return 
+    ctxRef.moveTo(edgeFirst.x, edgeFirst.y)
+    for (let k = 1; k < edge.length; k++) {
+      const edgeK = edge[k];
+      if (!edgeK) continue
+      ctxRef.lineTo(edgeK.x, edgeK.y)
+    }
     ctxRef.strokeStyle = "#ffffff"
     ctxRef.lineWidth = Math.max(1.2, widthPx * 0.08)
     ctxRef.stroke()
@@ -621,7 +653,9 @@ function drawCycleStreet(e: MapElement): void {
   let pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   pts = smoothIfNeeded(e, pts, false)
-  const lat = e.coords[0].lat
+  const coord = e.coords[0]
+  if (!coord) return
+  const lat = coord.lat
   const step = metersToPixels(18, lat)
   if (step < 10) return
   walkPath(pts, step, (p, angle) => {
@@ -650,7 +684,9 @@ function drawPedestrianPath(e: MapElement): void {
   let pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   pts = smoothIfNeeded(e, pts, false)
-  const lat = e.coords[0].lat
+  const coord = e.coords[0]
+  if (!coord) return
+  const lat = coord.lat
   const widthPx = Math.max(4, metersToPixels(e.width || 2.5, lat))
 
   ctxRef.save()
@@ -675,7 +711,9 @@ function drawParking(e: MapElement): void {
   let pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   pts = smoothIfNeeded(e, pts, false)
-  const lat = e.coords[0].lat
+  const coord = e.coords[0]
+  if (!coord) return
+  const lat = coord.lat
   const layout: ParkingLayout = e.layout || "bataille"
   const bayWidth = Math.max(6, metersToPixels(e.bay || 2.5, lat))
   const depthPx = Math.max(10, metersToPixels(e.depth || 5, lat))
@@ -707,6 +745,7 @@ function drawParking(e: MapElement): void {
   for (let i = 0; i < pts.length - 1; i++) {
     const a = pts[i]
     const b = pts[i + 1]
+    if(!a || !b) continue
     const segLen = Math.hypot(b.x - a.x, b.y - a.y)
     const angle = Math.atan2(b.y - a.y, b.x - a.x)
     const nx = Math.cos(angle + Math.PI / 2)
@@ -754,7 +793,10 @@ function drawCrossing(e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   const [P1, P2] = pts
-  const lat = e.coords[0].lat
+  if (!P1 || !P2) return
+  const coord = e.coords[0]
+  if (!coord) return
+  const lat = coord.lat
   const dx = P2.x - P1.x
   const dy = P2.y - P1.y
   const total = Math.hypot(dx, dy)
@@ -788,7 +830,10 @@ function drawYieldLine(e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   const [P1, P2] = pts
-  const lat = e.coords[0].lat
+  if (!P1 || !P2) return
+  const coord = e.coords[0]
+  if (!coord) return
+  const lat = coord.lat
   const dx = P2.x - P1.x
   const dy = P2.y - P1.y
   const total = Math.hypot(dx, dy)
@@ -830,7 +875,9 @@ function drawYieldLine(e: MapElement): void {
 function drawStopLine(e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
-  const lat = e.coords[0].lat
+  const coord = e.coords[0]
+  if (!coord) return
+  const lat = coord.lat
   const thickness = Math.max(3, metersToPixels(0.5, lat))
 
   ctxRef.save()
@@ -846,7 +893,10 @@ function drawGroundStop(e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   const [P1, P2] = pts
-  const lat = e.coords[0].lat
+  if (!P1 || !P2) return 
+  const coord = e.coords[0]
+  if (!coord) return
+  const lat = coord.lat
   const angle = Math.atan2(P2.y - P1.y, P2.x - P1.x)
   const cx = (P1.x + P2.x) / 2
   const cy = (P1.y + P2.y) / 2
@@ -868,7 +918,10 @@ function drawGroundArrow(e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   const [P1, P2] = pts
-  const lat = e.coords[0].lat
+  if (!P1 || !P2) return
+  const coord = e.coords[0]
+  if (!coord) return
+  const lat = coord.lat
   const angle = Math.atan2(P2.y - P1.y, P2.x - P1.x)
   const L_ = Math.max(20, metersToPixels(2.6, lat))
   const type: ArrowType = e.arrowType || "tout_droit"
@@ -925,7 +978,10 @@ function drawSharrow(e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   const [P1, P2] = pts
-  const lat = e.coords[0].lat
+  if (!P1 || !P2) return
+  const coord = e.coords[0]
+  if (!coord) return
+  const lat = coord.lat
   const angle = Math.atan2(P2.y - P1.y, P2.x - P1.x)
   const cx = (P1.x + P2.x) / 2
   const cy = (P1.y + P2.y) / 2
@@ -963,11 +1019,15 @@ function drawSmoothPolygon(pts: Pt[]): void {
   ctxRef.beginPath()
   const n = pts.length
   const mid = (a: Pt, b: Pt): Pt => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
-  const m0 = mid(pts[n - 1], pts[0])
+  const ptOrigin = pts[n-1]
+  const ptDest = pts[0]
+  if (!ptOrigin || !ptDest) return 
+  const m0 = mid(ptOrigin, ptDest)
   ctxRef.moveTo(m0.x, m0.y)
   for (let i = 0; i < n; i++) {
     const cur = pts[i]
     const next = pts[(i + 1) % n]
+    if (!cur || !next) continue
     const m = mid(cur, next)
     ctxRef.quadraticCurveTo(cur.x, cur.y, m.x, m.y)
   }
@@ -1001,8 +1061,10 @@ function drawBushMass(e: MapElement): void {
 }
 
 function drawTree(e: MapElement): void {
-  const p = cp(e.coords[0])
-  const lat = e.coords[0].lat
+  const coord = e.coords[0]
+  if (!coord) return
+  const p = cp(coord)
+  const lat = coord.lat
   const r = Math.max(5, metersToPixels(e.radius || 2.2, lat))
   ctxRef.save()
   ctxRef.beginPath()
@@ -1022,7 +1084,9 @@ function drawTree(e: MapElement): void {
 }
 
 function drawTrafficLight(e: MapElement): void {
-  const p = cp(e.coords[0])
+  const coord = e.coords[0]
+  if (!coord) return
+  const p = cp(coord)
   ctxRef.save()
   ctxRef.strokeStyle = "#333333"
   ctxRef.lineWidth = 3
@@ -1081,8 +1145,14 @@ function drawPreview(): void {
   ctxRef.lineWidth = 2
   ctxRef.setLineDash([6, 4])
   ctxRef.beginPath()
-  ctxRef.moveTo(pts[0].x, pts[0].y)
-  for (let i = 1; i < pts.length; i++) ctxRef.lineTo(pts[i].x, pts[i].y)
+  const ptFirst = pts[0]
+  if (!ptFirst) return 
+  ctxRef.moveTo(ptFirst.x, ptFirst.y)
+  for (let i = 1; i < pts.length; i++) {
+    const pt = pts[i]
+    if (!pt) continue 
+    ctxRef.lineTo(pt.x, pt.y)
+  }
   if (showMouseSegment && mousePos) {
     const mp = cp(mousePos)
     ctxRef.lineTo(mp.x, mp.y)

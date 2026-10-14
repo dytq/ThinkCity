@@ -53,9 +53,21 @@ export function metersToPixels(m: number, lat: number): number {
 
 export function pathFromPoints(pts: Pt[]): void {
   const ctx = getCtx()
+
+  if (pts.length === 0) return
+
+  const first = pts[0]
+  if (!first) return
+
   ctx.beginPath()
-  ctx.moveTo(pts[0].x, pts[0].y)
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y)
+  ctx.moveTo(first.x, first.y)
+
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i]
+    if (!p) continue
+
+    ctx.lineTo(p.x, p.y)
+  }
 }
 
 /* Spline de Catmull-Rom (équivalente à des Bézier cubiques bout à bout) */
@@ -64,8 +76,14 @@ export function catmullRomSpline(pts: Pt[], segmentsPerPiece: number, closed: bo
   if (n < 3) return pts.slice()
 
   const at = (i: number): Pt => {
-    if (closed) return pts[((i % n) + n) % n]
-    return pts[Math.max(0, Math.min(n - 1, i))]
+    const index = closed
+      ? ((i % n) + n) % n
+      : Math.max(0, Math.min(n - 1, i));
+    const point = pts[index];
+    if (!point) {
+      throw new Error(`Point introuvable à l'index ${index}`);
+    }
+    return point;
   }
 
   const out: Pt[] = []
@@ -95,8 +113,14 @@ export function catmullRomSpline(pts: Pt[], segmentsPerPiece: number, closed: bo
       out.push({ x, y })
     }
   }
-
-  out.push(closed ? at(0) : pts[n - 1])
+  const index = closed 
+    ? 0
+    : n -1
+  
+  if (!pts[index]) {
+    throw new Error(`Point introuvable à l'index ${index}`);
+  }
+  out.push(pts[index])
   return out
 }
 
@@ -105,24 +129,27 @@ export function smoothIfNeeded(e: Smoothable, pts: Pt[], closed?: boolean): Pt[]
   return pts
 }
 
-export function walkPath(
-  pts: Pt[],
-  step: number,
-  cb: (p: Pt, angle: number) => void
-): void {
+export function walkPath(pts: Pt[], step: number, cb: (p: Pt, angle: number) => void): void {
   let d = 0
   let next = step / 2
+
   for (let i = 0; i < pts.length - 1; i++) {
     const a = pts[i]
     const b = pts[i + 1]
+
+    if (!a || !b) continue
+
     const segLen = Math.hypot(b.x - a.x, b.y - a.y)
+
     while (next <= d + segLen) {
       const t = (next - d) / segLen
       const x = a.x + (b.x - a.x) * t
       const y = a.y + (b.y - a.y) * t
+
       cb({ x, y }, Math.atan2(b.y - a.y, b.x - a.x))
       next += step
     }
+
     d += segLen
   }
 }
@@ -138,45 +165,80 @@ export function distToSegment(p: Pt, a: Pt, b: Pt): number {
 export function minDistToSegments(pts: Pt[], p: Pt, closed?: boolean): number {
   let m = Infinity
   const n = pts.length - (closed ? 0 : 1)
+
   for (let i = 0; i < n; i++) {
-    m = Math.min(m, distToSegment(p, pts[i], pts[(i + 1) % pts.length]))
+    const a = pts[i]
+    const b = pts[(i + 1) % pts.length]
+
+    if (!a || !b) continue
+
+    m = Math.min(m, distToSegment(p, a, b))
   }
+
   return m
 }
 
 export function offsetPolyline(pts: Pt[], offset: number): Pt[] {
   const n = pts.length
   const out: Pt[] = []
+
   for (let i = 0; i < n; i++) {
+    const current = pts[i]
+    if (!current) continue
+
     let dx = 0
     let dy = 0
+
     if (i > 0) {
-      dx += pts[i].x - pts[i - 1].x
-      dy += pts[i].y - pts[i - 1].y
+      const prev = pts[i - 1]
+      if (prev) {
+        dx += current.x - prev.x
+        dy += current.y - prev.y
+      }
     }
+
     if (i < n - 1) {
-      dx += pts[i + 1].x - pts[i].x
-      dy += pts[i + 1].y - pts[i].y
+      const next = pts[i + 1]
+      if (next) {
+        dx += next.x - current.x
+        dy += next.y - current.y
+      }
     }
+
     const len = Math.hypot(dx, dy) || 1
     const nx = -dy / len
     const ny = dx / len
-    out.push({ x: pts[i].x + nx * offset, y: pts[i].y + ny * offset })
+
+    out.push({
+      x: current.x + nx * offset,
+      y: current.y + ny * offset
+    })
   }
+
   return out
 }
 
 export function pointInPolygon(p: Pt, pts: Pt[]): boolean {
   let inside = false
+
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-    const xi = pts[i].x
-    const yi = pts[i].y
-    const xj = pts[j].x
-    const yj = pts[j].y
+    const current = pts[i]
+    const previous = pts[j]
+
+    if (!current || !previous) continue
+
+    const xi = current.x
+    const yi = current.y
+    const xj = previous.x
+    const yj = previous.y
+
     const intersect =
-      yi > p.y !== yj > p.y && p.x < ((xj - xi) * (p.y - yi)) / (yj - yi) + xi
+      (yi > p.y) !== (yj > p.y) &&
+      p.x < ((xj - xi) * (p.y - yi)) / (yj - yi) + xi
+
     if (intersect) inside = !inside
   }
+
   return inside
 }
 
