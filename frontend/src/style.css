@@ -69,11 +69,11 @@
 
 @layer components {
   .up-root {
-    /* Alias conservés : le template utilise var(--accent) / var(--accent-dim) en style inline */
+    /* Alias conservés */
     --accent: var(--color-primary);
     --accent-dim: var(--color-primary-container);
 
-    @apply flex w-full min-h-[400px] overflow-hidden box-border bg-background text-on-background;
+    @apply relative w-full min-h-[400px] overflow-hidden box-border bg-background text-on-background;
     height: var(--up-height, 100vh);
     font-family: 'Segoe UI', Roboto, Arial, sans-serif;
 
@@ -85,115 +85,83 @@
     & select {
       font-family: inherit;
     }
-
-    /* ---------- SIDEBAR ---------- */
-    & #sidebar {
-      @apply w-[310px] min-w-[310px] bg-surface-container-low border-r border-outline-variant flex flex-col overflow-y-auto;
+    & button:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
     }
-    & #sidebar::-webkit-scrollbar {
+
+    /* ---------- CARTE (plein écran) ---------- */
+    & #map-wrap {
+      @apply absolute inset-0;
+    }
+    & #map {
+      @apply absolute inset-0 bg-surface-dim;
+    }
+    & .up-overlay-canvas {
+      @apply absolute top-0 left-0 pointer-events-none z-[450];
+    }
+    & .leaflet-control-attribution {
+      @apply text-[10px];
+    }
+
+    /* ---------- LÉGENDE (haut gauche) ---------- */
+    & .legend-toggle {
+      @apply absolute top-2.5 left-[58px] z-[1100] py-[7px] px-3 rounded-lg cursor-pointer text-xs
+             bg-surface-container-low border border-outline-variant text-on-surface;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+    }
+    & .legend-toggle:hover {
+      @apply border-primary-container bg-surface-container-high;
+    }
+    & .legend-toggle.on {
+      @apply border-primary text-on-primary font-semibold;
+      background: linear-gradient(160deg, var(--color-primary-container), var(--color-primary));
+    }
+    & .legend-card {
+      @apply absolute top-[50px] left-[58px] z-[1100] w-[270px] flex flex-col gap-[5px] py-3 px-3.5
+             rounded-xl bg-surface-container-low border border-outline-variant;
+      box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+    }
+    & .legend-item {
+      @apply flex items-center gap-2 text-[11px] text-on-surface-variant;
+    }
+    & .swatch {
+      @apply w-[22px] h-4 rounded shrink-0 border border-outline-variant;
+    }
+
+    /* ---------- PANNEAU DE PROPRIÉTÉS (haut droite) ---------- */
+    & .props-panel {
+      @apply absolute top-2.5 right-2.5 z-[1100] w-[300px] flex flex-col overflow-hidden
+             rounded-xl bg-surface-container-low border border-outline-variant border-t-[3px] border-t-primary;
+      max-height: calc(100% - 210px);
+      box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+    }
+    & .props-head {
+      @apply flex items-center gap-2.5 py-3 px-4 border-b border-outline-variant;
+    }
+    & .props-head h2 {
+      @apply m-0 text-[15px] font-semibold tracking-[.3px] text-on-surface;
+    }
+    & .props-head p {
+      @apply mt-0.5 mb-0 text-[11.5px] leading-[1.4] text-on-surface-variant;
+    }
+    & .props-ico {
+      @apply w-[34px] text-center text-2xl leading-none;
+    }
+    & .props-body {
+      @apply py-3.5 px-4 overflow-y-auto;
+    }
+    & .props-body::-webkit-scrollbar {
       @apply w-2;
     }
-    & #sidebar::-webkit-scrollbar-thumb {
+    & .props-body::-webkit-scrollbar-thumb {
       @apply bg-outline-variant rounded;
     }
-
-    & .sb-header {
-      @apply pt-[18px] px-[18px] pb-2.5 border-b border-outline-variant;
+    & .props-empty {
+      @apply m-0 text-xs leading-normal text-on-surface-variant;
     }
-    & .sb-header h1 {
-      @apply text-[15px] mt-0 mx-0 mb-1 tracking-[.3px] flex items-center gap-2 text-on-surface;
-    }
-    & .sb-header p {
-      @apply m-0 text-[11.5px] text-on-surface-variant leading-[1.4];
-    }
-
-    & .sb-section {
-      @apply py-3.5 px-[18px] border-b border-outline-variant;
-    }
-    & .sb-section h2 {
-      @apply text-[11px] uppercase tracking-[.08em] text-on-surface-variant m-0 mb-2.5 font-semibold;
-    }
-
-    /* ---------- BOUTONS D'OUTILS ---------- */
-    & .tool-grid {
-      @apply grid grid-cols-2 gap-1.5;
-    }
-    & .tool-btn {
-      @apply flex flex-col items-center justify-center gap-1 py-[9px] px-1 rounded-lg
-             bg-surface-container-lowest border border-outline-variant text-on-surface cursor-pointer
-             text-[11px] text-center select-none transition-all duration-[120ms] ease-in-out;
-    }
-    & .tool-btn .ico {
-      @apply text-[18px] leading-none;
-    }
-    & .tool-btn:hover {
-      @apply border-primary-container bg-surface-container-high;
-    }
-    & .tool-btn.active {
-      @apply border-primary text-on-primary font-semibold;
-      background: linear-gradient(160deg, var(--color-primary-container), var(--color-primary));
-    }
-
-    /* Éditer le tracé (secondary) */
-    & .tool-btn.edit-btn {
-      @apply col-span-2 bg-secondary-fixed border-secondary-fixed-dim text-on-secondary-fixed;
-    }
-    & .tool-btn.edit-btn:hover {
-      @apply border-secondary bg-secondary-fixed-dim;
-    }
-    & .tool-btn.edit-btn.active {
-      @apply border-secondary text-on-secondary;
-      background: linear-gradient(160deg, var(--color-secondary-container), var(--color-secondary));
-    }
-
-    /* Ajouter une branche (tertiary) */
-    & .tool-btn.branch-btn {
-      @apply col-span-2 bg-tertiary-fixed border-tertiary-fixed-dim text-on-tertiary-fixed;
-    }
-    & .tool-btn.branch-btn:hover {
-      @apply border-tertiary bg-tertiary-fixed-dim;
-    }
-    & .tool-btn.branch-btn.active {
-      @apply border-tertiary text-on-tertiary;
-      background: linear-gradient(160deg, var(--color-tertiary-container), var(--color-tertiary));
-    }
-
-    /* Supprimer (error) */
-    & .tool-btn.delete-btn {
-      @apply col-span-2 bg-error-container border-error/30 text-on-error-container;
-    }
-    & .tool-btn.delete-btn:hover {
-      @apply border-error;
-    }
-    & .tool-btn.delete-btn.active {
-      @apply border-error text-on-error;
-      background: linear-gradient(160deg, var(--color-error), var(--color-on-error-container));
-    }
-
-    & .tool-btn.template-btn {
-      @apply bg-primary-fixed border-primary-fixed-dim text-on-primary-fixed text-[11.5px];
-    }
-    & .tool-btn.template-btn.active {
-      @apply border-primary text-on-primary font-semibold;
-      background: linear-gradient(160deg, var(--color-primary-container), var(--color-primary));
-    }
-
-    /* ---------- VALIDER / ANNULER ---------- */
-    & .action-row {
-      @apply flex gap-2 mt-2.5;
-    }
-    & .action-btn {
-      @apply flex-1 py-[9px] px-1 rounded-lg border border-outline-variant bg-surface-container-lowest
-             text-on-surface cursor-pointer text-xs;
-    }
-    & .action-btn:hover {
-      @apply border-primary-container bg-surface-container-high;
-    }
-    & .action-btn.validate {
-      @apply text-tertiary font-semibold;
-    }
-    & .action-btn.cancel {
-      @apply text-error font-semibold;
+    & .props-empty strong {
+      @apply text-primary;
     }
 
     /* ---------- PARAMÈTRES ---------- */
@@ -209,6 +177,10 @@
     & .setting-row input[type=color] {
       @apply w-[38px] h-[26px] border border-outline-variant rounded-md bg-transparent p-0 cursor-pointer;
     }
+    & .setting-row input[type=checkbox] {
+      @apply size-[17px] cursor-pointer shrink-0;
+      accent-color: var(--color-primary);
+    }
     & .setting-row select {
       @apply bg-surface-container-lowest border border-outline-variant text-on-surface rounded-md py-1 px-1.5 text-xs max-w-[150px];
     }
@@ -216,47 +188,180 @@
     & .setting-row select:focus {
       @apply outline-none border-primary;
     }
-
-    /* ---------- LÉGENDE ---------- */
-    & .legend {
-      @apply flex flex-col gap-[5px];
+    /* Ordre Z (mode édition) */
+    & .setting-row.z-row {
+      @apply py-1.5 px-2 rounded-md bg-primary-fixed border border-primary-fixed-dim;
     }
-    & .legend-item {
-      @apply flex items-center gap-2 text-[11px] text-on-surface-variant;
-    }
-    & .swatch {
-      @apply size-4 rounded shrink-0 border border-outline-variant;
+    & .setting-row.z-row label {
+      @apply text-primary font-semibold;
     }
 
-    /* ---------- BARRE DE STATUT ---------- */
-    & #status-bar {
-      @apply mt-auto py-3.5 px-[18px] bg-surface-container border-t border-outline-variant
-             text-xs text-on-surface-variant leading-normal min-h-[70px];
+    /* ---------- DOCK DU BAS ---------- */
+    & .dock {
+      @apply absolute left-1/2 bottom-3.5 -translate-x-1/2 z-[1100] w-max
+             flex flex-col items-center gap-2 pointer-events-none;
+      max-width: calc(100% - 20px);
+
+      /* le conteneur laisse passer les clics vers la carte ; seuls ses enfants les captent */
+      & > * {
+        @apply pointer-events-auto;
+      }
+      & > .status {
+        @apply pointer-events-none;
+      }
     }
-    & #status-bar strong {
+
+    /* Message d'aide */
+    & .status {
+      @apply max-w-[720px] text-center text-xs leading-[1.4] py-1.5 px-4 rounded-full
+             bg-surface-container-lowest border border-outline-variant text-on-surface-variant;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+    }
+    & .status strong {
       @apply text-primary;
     }
 
-    & .clear-all {
-      @apply w-full p-[9px] rounded-lg border border-error/40 bg-error-container
-             text-on-error-container cursor-pointer text-xs mt-1.5;
+    /* Plateau d'outils de la catégorie */
+    & .tray {
+      @apply flex gap-1.5 p-2 max-w-full overflow-x-auto rounded-2xl
+             bg-surface-container-low border border-outline-variant;
+      box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
     }
-    & .clear-all:hover {
-      @apply bg-error text-on-error;
+    & .tray::-webkit-scrollbar {
+      @apply h-2;
+    }
+    & .tray::-webkit-scrollbar-thumb {
+      @apply bg-outline-variant rounded;
     }
 
-    /* ---------- CARTE ---------- */
-    & #map-wrap {
-      @apply flex-1 relative min-w-0;
+    /* ---------- BOUTONS D'OUTILS ---------- */
+    & .tool-btn {
+      @apply shrink-0 w-[88px] min-h-[72px] flex flex-col items-center justify-center gap-1 py-[9px] px-1 rounded-lg
+             bg-surface-container-lowest border border-outline-variant text-on-surface cursor-pointer
+             text-[11px] leading-[1.15] text-center select-none transition-all duration-[120ms] ease-in-out;
     }
-    & #map {
-      @apply absolute inset-0 bg-surface-dim;
+    & .tool-btn .ico {
+      @apply text-2xl leading-none;
     }
-    & .up-overlay-canvas {
-      @apply absolute top-0 left-0 pointer-events-none z-[450];
+    & .tool-btn:hover {
+      @apply border-primary-container bg-surface-container-high -translate-y-0.5;
     }
-    & .leaflet-control-attribution {
-      @apply text-[10px];
+    & .tool-btn.active {
+      @apply border-primary text-on-primary font-semibold;
+      background: linear-gradient(160deg, var(--color-primary-container), var(--color-primary));
+    }
+
+    /* Éditer le tracé (secondary) */
+    & .tool-btn.edit-btn {
+      @apply bg-secondary-fixed border-secondary-fixed-dim text-on-secondary-fixed;
+    }
+    & .tool-btn.edit-btn:hover {
+      @apply border-secondary bg-secondary-fixed-dim;
+    }
+    & .tool-btn.edit-btn.active {
+      @apply border-secondary text-on-secondary;
+      background: linear-gradient(160deg, var(--color-secondary-container), var(--color-secondary));
+    }
+
+    /* Ajouter une branche (tertiary) */
+    & .tool-btn.branch-btn {
+      @apply bg-tertiary-fixed border-tertiary-fixed-dim text-on-tertiary-fixed;
+    }
+    & .tool-btn.branch-btn:hover {
+      @apply border-tertiary bg-tertiary-fixed-dim;
+    }
+    & .tool-btn.branch-btn.active {
+      @apply border-tertiary text-on-tertiary;
+      background: linear-gradient(160deg, var(--color-tertiary-container), var(--color-tertiary));
+    }
+
+    /* Supprimer (error) */
+    & .tool-btn.delete-btn {
+      @apply bg-error-container border-error/30 text-on-error-container;
+    }
+    & .tool-btn.delete-btn:hover {
+      @apply border-error;
+    }
+    & .tool-btn.delete-btn.active {
+      @apply border-error text-on-error;
+      background: linear-gradient(160deg, var(--color-error), var(--color-on-error-container));
+    }
+
+    /* ---------- BARRE DES CATÉGORIES + ACTIONS ---------- */
+    & .cats-bar {
+      @apply flex items-center gap-1.5 py-1.5 px-2 max-w-full overflow-x-auto rounded-2xl
+             bg-surface-container-low border border-outline-variant;
+      box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+    }
+    & .cat-btn {
+      @apply shrink-0 flex items-center gap-[7px] py-[7px] px-3 rounded-lg cursor-pointer text-xs
+             bg-transparent border border-transparent text-on-surface-variant transition-all duration-[120ms] ease-in-out;
+    }
+    & .cat-btn .ico {
+      @apply text-xl leading-none;
+    }
+    & .cat-btn:hover {
+      @apply bg-surface-container-high text-on-surface;
+    }
+    & .cat-btn.active {
+      @apply bg-primary-fixed border-primary text-on-primary-fixed font-semibold;
+    }
+    & .sep {
+      @apply self-stretch w-px my-0.5 mx-1 bg-outline-variant shrink-0;
+    }
+
+    /* ---------- VALIDER / ANNULER / EFFACER ---------- */
+    & .action-btn {
+      @apply shrink-0 flex items-center gap-[7px] py-[9px] px-3 rounded-lg border border-outline-variant
+             bg-surface-container-lowest text-on-surface cursor-pointer text-xs;
+    }
+    & .action-btn:hover {
+      @apply border-primary-container bg-surface-container-high;
+    }
+    & .action-btn kbd {
+      @apply text-[10px] font-normal px-1 rounded border border-outline-variant text-on-surface-variant;
+      font-family: inherit;
+    }
+    & .action-btn.validate {
+      @apply text-tertiary font-semibold;
+    }
+    & .action-btn.cancel {
+      @apply text-error font-semibold;
+    }
+    & .clear-all {
+      @apply border-error/40 bg-error-container text-on-error-container;
+    }
+    & .clear-all:hover {
+      @apply bg-error text-on-error border-error;
+    }
+
+    /* ---------- MOBILE ---------- */
+    & .cat-btn .lbl {
+      @apply max-md:hidden;
+    }
+    & .action-btn kbd {
+      @apply max-md:hidden;
+    }
+    & .props-panel {
+      @apply max-md:w-[240px];
+      @media (max-width: 767px) {
+        max-height: calc(100% - 250px);
+      }
+    }
+    & .legend-toggle {
+      @apply max-md:top-auto max-md:bottom-[210px] max-md:left-2.5;
+    }
+    & .legend-card {
+      @apply max-md:top-auto max-md:bottom-[250px] max-md:left-2.5;
+    }
+
+    /* ---------- ACCESSIBILITÉ ---------- */
+    & .tool-btn,
+    & .cat-btn {
+      @apply motion-reduce:transition-none;
+    }
+    & .tool-btn:hover {
+      @apply motion-reduce:translate-y-0;
     }
   }
 }

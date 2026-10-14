@@ -1,137 +1,112 @@
 <template>
   <div class="up-root" ref="root">
-    <aside id="sidebar">
-      <div class="sb-section">
-        <h2>Équipements & Marquages</h2>
-        <div class="tool-grid" id="tool-grid">
-          <button class="tool-btn" data-tool="route"><span class="ico">🛣️</span>Route</button>
-          <button class="tool-btn" data-tool="piste_cyclable"><span class="ico">🚴</span>Piste cycl.</button>
-          <button class="tool-btn" data-tool="chemin_pieton"><span class="ico">🧱</span>Chemin piéton</button>
-          <button class="tool-btn" data-tool="rond_point"><span class="ico">⭕</span>Rond-point</button>
-          <button class="tool-btn" data-tool="hachures"><span class="ico">📐</span>Zébras / Hachures</button>
-          <button class="tool-btn" data-tool="passage_pieton"><span class="ico">🚸</span>Pass. piéton</button>
-          <button class="tool-btn" data-tool="cedez_le_passage"><span class="ico">🔻</span>Cédez-le-passage</button>
-          <button class="tool-btn" data-tool="ligne_stop"><span class="ico">🛑</span>Ligne de stop</button>
-          <button class="tool-btn" data-tool="stop_sol"><span class="ico">🅢</span>STOP au sol</button>
-          <button class="tool-btn" data-tool="fleche_sol"><span class="ico">⬆️</span>Flèche directionnelle</button>
-          <button class="tool-btn" data-tool="bande_cyclable"><span class="ico">🚲</span>Bande cyclable</button>
-          <button class="tool-btn" data-tool="chevron_velo"><span class="ico">˄˄</span>Chevrons vélo</button>
-          <button class="tool-btn" data-tool="rue_cyclable"><span class="ico">Ⓑ</span>Rue cyclable</button>
-          <button class="tool-btn" data-tool="feu_tricolore"><span class="ico">🚦</span>Feu tricolore</button>
-          <button class="tool-btn" data-tool="feu_clignotant"><span class="ico">🟡</span>Feu clignotant</button>
-          <button class="tool-btn" data-tool="stationnement"><span class="ico">🅿️</span>Stationnement</button>
-          <button class="tool-btn" data-tool="espace_vert"><span class="ico">🌿</span>Espace vert</button>
-          <button class="tool-btn" data-tool="massif"><span class="ico">🌳</span>Massif</button>
-          <button class="tool-btn" data-tool="arbre"><span class="ico">🌲</span>Arbre isolé</button>
-          <button class="tool-btn edit-btn" data-tool="edit"><span class="ico">✏️</span>Éditer le tracé</button>
-          <button class="tool-btn branch-btn" data-tool="branch"><span class="ico">🔀</span>Ajouter une branche</button>
-          <button class="tool-btn delete-btn" data-tool="delete"><span class="ico">🗑️</span>Supprimer un élément</button>
-        </div>
-        <div class="action-row">
-          <button class="action-btn validate" id="btn-validate">✔ Valider (Entrée)</button>
-          <button class="action-btn cancel" id="btn-cancel">✕ Annuler (Échap)</button>
-        </div>
-      </div>
-      <div class="sb-section">
-        <h2>Paramètres</h2>
-        <div class="setting-row" id="edit-z-row" style="display:none; background:rgba(255,157,61,0.1); padding:4px 6px; border-radius:6px; border:1px solid var(--accent-dim);">
-          <label style="color:var(--accent); font-weight:600;">Ordre Z (Élément sélectionné)</label>
-          <input type="number" id="set-selected-z" value="0" step="1">
-        </div>
-        <div class="setting-row" style="background:rgba(59,163,255,0.08); padding:4px 6px; border-radius:6px; border:1px solid #325266;">
-          <label style="color:#3ba3ff;">Lissage des tracés (courbes de Bézier)</label>
-          <input type="checkbox" id="set-smooth-curves" style="width:17px;height:17px;cursor:pointer;">
-        </div>
-        <div class="setting-row"><label>Largeur route (m)</label><input type="number" id="set-route-width" value="6" min="2" max="20" step="0.5"></div>
-        <div class="setting-row"><label>Nombre de voies</label><input type="number" id="set-route-lanes" value="2" min="1" max="6" step="1"></div>
-        <div class="setting-row"><label>Sens de circulation</label>
-          <select id="set-route-direction">
-            <option value="bidirectional">Bidirectionnelle</option>
-            <option value="unidirectional">Sens unique</option>
-          </select>
-        </div>
-        <div class="setting-row"><label>Terminaison route</label>
-          <select id="set-route-linecap">
-            <option value="round">Ronde</option>
-            <option value="butt">Carrée (nette)</option>
-            <option value="square">Carrée (dépassante)</option>
-          </select>
-        </div>
-        <div class="setting-row"><label>Rayon rond-point (m)</label><input type="number" id="set-roundabout-radius" value="12" min="5" max="40" step="1"></div>
-        <div class="setting-row"><label>Voies du rond-point</label><input type="number" id="set-roundabout-lanes" value="2" min="1" max="4" step="1"></div>
-        <div class="setting-row"><label>Largeur zébras (m)</label><input type="number" id="set-hatch-width" value="1.5" min="0.5" max="4" step="0.25"></div>
-        <div class="setting-row"><label>Forme zébras</label>
-          <select id="set-hatch-style">
-            <option value="straight">Angles droits (Net)</option>
-            <option value="smooth">Arrondis</option>
-          </select>
-        </div>
-        <div class="setting-row"><label>Largeur piste cyclable (m)</label><input type="number" id="set-cycle-width" value="2" min="1" max="6" step="0.5"></div>
-        <div class="setting-row"><label>Couleur piste cyclable</label><input type="color" id="set-cycle-color" value="#3c8a3c"></div>
-        <div class="setting-row"><label>Sens piste cyclable</label>
-          <select id="set-cycle-direction">
-            <option value="unidirectional">Unidirectionnelle</option>
-            <option value="bidirectional">Bidirectionnelle</option>
-          </select>
-        </div>
-        <div class="setting-row"><label>Largeur chemin piéton (m)</label><input type="number" id="set-ped-width" value="2.5" min="1" max="8" step="0.5"></div>
-
-        <div class="setting-row"><label>Type stationnement</label>
-          <select id="set-park-layout">
-            <option value="bataille">Bataille (90°)</option>
-            <option value="epi">Épi (45°)</option>
-            <option value="creneau">Créneau (Parallèle)</option>
-          </select>
-        </div>
-        <div class="setting-row"><label>Profondeur place (m)</label><input type="number" id="set-park-depth" value="5" min="1.5" max="8" step="0.5"></div>
-        <div class="setting-row"><label>Largeur place (m)</label><input type="number" id="set-park-bay" value="2.5" min="1.5" max="5" step="0.1"></div>
-
-        <div class="setting-row"><label>Largeur passage piéton (m)</label><input type="number" id="set-cross-span" value="3.5" min="2" max="10" step="0.5"></div>
-        <div class="setting-row"><label>Largeur bandes piéton (m)</label><input type="number" id="set-cross-stripe" value="0.5" min="0.3" max="1" step="0.1"></div>
-        <div class="setting-row"><label>Type de flèche au sol</label>
-          <select id="set-arrow-type">
-            <option value="tout_droit">Tout droit</option>
-            <option value="gauche">Tourne à gauche</option>
-            <option value="droite">Tourne à droite</option>
-            <option value="tout_droit_gauche">Tout droit + gauche</option>
-            <option value="tout_droit_droite">Tout droit + droite</option>
-          </select>
-        </div>
-        <div class="setting-row"><label>Rayon houppier arbre (m)</label><input type="number" id="set-tree-radius" value="2.2" min="1" max="8" step="0.2"></div>
-      </div>
-
-      <div class="sb-section">
-        <h2>Légende</h2>
-        <div class="legend">
-          <div class="legend-item"><span class="swatch" style="background:#2c2c2c;"></span>Route / Voies</div>
-          <div class="legend-item"><span class="swatch" style="background:#2c2c2c; border:1px dashed #fff;"></span>Rond-point</div>
-          <div class="legend-item"><span class="swatch" style="background:repeating-linear-gradient(45deg,#2c2c2c,#2c2c2c 4px,#fff 4px,#fff 8px);"></span>Zébras / Hachures</div>
-          <div class="legend-item"><span class="swatch" style="background:#3c8a3c;"></span>Piste cyclable</div>
-          <div class="legend-item"><span class="swatch" style="background:#2c2c2c; border:2px solid #3c8a3c;"></span>Bande / rue cyclable / chevrons</div>
-          <div class="legend-item"><span class="swatch" style="background:#b9b2a3;"></span>Chemin piéton</div>
-          <div class="legend-item"><span class="swatch" style="background:#ffffff;"></span>Passage piéton / Cédez-le-passage</div>
-          <div class="legend-item"><span class="swatch" style="background:#e14b4b;"></span>Feu tricolore</div>
-          <div class="legend-item"><span class="swatch" style="background:#ffcc00;"></span>Feu clignotant</div>
-          <div class="legend-item"><span class="swatch" style="background:#4a7c3a;"></span>Espace vert / Arbre</div>
-        </div>
-        <button class="clear-all" id="btn-clear-all">🗑️ Effacer tout le projet</button>
-      </div>
-
-      <div id="status-bar">Sélectionnez un équipement ou un marquage dans la liste pour commencer.</div>
-    </aside>
-
+    <!-- ================= CARTE ================= -->
     <div id="map-wrap">
       <div id="map" ref="mapEl"></div>
+    </div>
+
+    <!-- ================= LÉGENDE (haut gauche) ================= -->
+    <button class="legend-toggle" :class="{ on: showLegend }" @click="showLegend = !showLegend" title="Légende">
+      ℹ️ Légende
+    </button>
+    <div class="legend-card" v-show="showLegend">
+      <div class="legend-item"><span class="swatch" style="background:#2c2c2c;"></span>Route / Voies</div>
+      <div class="legend-item"><span class="swatch" style="background:#2c2c2c; border:1px dashed #fff;"></span>Rond-point</div>
+      <div class="legend-item"><span class="swatch" style="background:repeating-linear-gradient(45deg,#2c2c2c,#2c2c2c 4px,#fff 4px,#fff 8px);"></span>Zébras / Hachures</div>
+      <div class="legend-item"><span class="swatch" style="background:#3c8a3c;"></span>Piste cyclable</div>
+      <div class="legend-item"><span class="swatch" style="background:#2c2c2c; border:2px solid #3c8a3c;"></span>Bande / rue cyclable / chevrons</div>
+      <div class="legend-item"><span class="swatch" style="background:#b9b2a3;"></span>Chemin piéton</div>
+      <div class="legend-item"><span class="swatch" style="background:#ffffff;"></span>Passage piéton / Cédez-le-passage</div>
+      <div class="legend-item"><span class="swatch" style="background:#e14b4b;"></span>Feu tricolore</div>
+      <div class="legend-item"><span class="swatch" style="background:#ffcc00;"></span>Feu clignotant</div>
+      <div class="legend-item"><span class="swatch" style="background:#4a7c3a;"></span>Espace vert / Arbre</div>
+    </div>
+
+    <!-- ================= PROPRIÉTÉS (haut droite) ================= -->
+    <section class="props-panel" v-show="uiTool">
+      <header class="props-head">
+        <span class="props-ico">{{ activeToolInfo.icon }}</span>
+        <div>
+          <h2>{{ activeToolInfo.label }}</h2>
+          <p v-if="uiTool === 'edit'">Propriétés de l'élément</p>
+          <p v-else-if="uiTool === 'delete'">Aucune propriété</p>
+          <p v-else>Propriétés avant placement</p>
+        </div>
+      </header>
+
+      <div class="props-body">
+        <!-- Champs par type : tous restent dans le DOM (v-show) pour que render.js
+             puisse toujours lire les mêmes id via byId() -->
+        <template v-for="f in fields" :key="f.id">
+          <div class="setting-row" v-show="f.tools.includes(uiTool)" :class="{ 'is-check': f.type === 'checkbox' }">
+            <label :for="f.id">{{ f.label }}</label>
+
+            <input v-if="f.type === 'number'" type="number" :id="f.id" 
+                  v-model.number="settingsValues[f.id]"
+                  :min="f.min" :max="f.max" :step="f.step" @input="draw" @change="draw">
+
+            <input v-else-if="f.type === 'color'" type="color" :id="f.id" 
+                  v-model="settingsValues[f.id]" @input="draw" @change="draw">
+
+            <input v-else-if="f.type === 'checkbox'" type="checkbox" :id="f.id" 
+                  v-model="settingsValues[f.id]" @input="draw" @change="draw">
+
+            <select v-else-if="f.type === 'select'" :id="f.id" 
+                    v-model="settingsValues[f.id]" @input="draw" @change="draw">
+              <option v-for="o in f.options" :key="o[0]" :value="o[0]">{{ o[1] }}</option>
+            </select>
+          </div>
+        </template>
+
+        <!-- Mode édition -->
+        <div id="edit-z-row" class="setting-row z-row" v-show="uiTool === 'edit' && hasSelection">
+          <label for="set-selected-z">Ordre Z (élément sélectionné)</label>
+          <input type="number" id="set-selected-z" :value="selectedZ" step="1" @input="onZInput">
+        </div>
+        <p class="props-empty" v-if="uiTool === 'edit' && !hasSelection">
+          Cliquez sur un élément de la carte pour modifier sa géométrie et son ordre Z.
+        </p>
+        <p class="props-empty" v-else-if="uiTool === 'edit' && hasSelection">
+          Type : <strong>{{ selectedType }}</strong>. Glissez une poignée pour déplacer un point.
+        </p>
+        <p class="props-empty" v-if="uiTool && uiTool !== 'edit' && !hasFieldsForTool">
+          Cet élément n'a pas de paramètre à régler.
+        </p>
+      </div>
+    </section>
+
+    <!-- ================= DOCK DU BAS (style Cities: Skylines) ================= -->
+    <div class="dock">
+      <!-- <div class="status" id="status-bar" v-html="statusHtml"></div>-->
+
+      <!-- Plateau d'outils de la catégorie active -->
+      <div class="tray" id="tool-grid">
+        <button v-for="t in currentCategory.tools" :key="t.id"
+                class="tool-btn" :class="[{ active: uiTool === t.id }, t.cls]"
+                :data-tool="t.id" :title="t.label" @click="onToolClick(t.id)">
+          <span class="ico">{{ t.icon }}</span>
+          <span class="lbl">{{ t.label }}</span>
+        </button>
+      </div>
+
+      <!-- Barre des catégories + actions -->
+      <div class="cats-bar">
+        <button v-for="c in categories" :key="c.id" class="cat-btn"
+                :class="{ active: activeCat === c.id }" :title="c.label" @click="activeCat = c.id">
+          <span class="ico">{{ c.icon }}</span>
+          <span class="lbl">{{ c.label }}</span>
+        </button>
+
+        <span class="sep"></span>
+        
+        <button class="action-btn clear-all" id="btn-clear-all" @click="clearAll" title="Effacer tout le projet">🗑️ Tout Supprimer</button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { 
-  ref, 
-  onMounted, 
-  onBeforeUnmount 
-} from 'vue'
+import { ref, computed, onMounted,reactive, onBeforeUnmount } from 'vue'
 
 import {
   initGeometry,
@@ -148,7 +123,6 @@ import {
 } from "./render.js";
 
 import L from 'leaflet'
-
 import 'leaflet/dist/leaflet.css'
 
 const TILE_URL = 'https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'
@@ -162,7 +136,149 @@ let overlay = null
 let ctx = null
 
 /* ============================================================
-   DONNÉES & ÉTAT
+   ÉTAT RÉACTIF (UI uniquement)
+   ============================================================ */
+const uiTool = ref(null)            // outil actif (miroir de currentTool)
+const activeCat = ref('voirie')     // catégorie ouverte dans le dock
+const showLegend = ref(false)
+const statusHtml = ref('')
+const hasSelection = ref(false)
+const selectedZ = ref(0)
+const selectedType = ref('')
+
+/* ============================================================
+   CATÉGORIES DU DOCK (mêmes icônes qu'avant)
+   ============================================================ */
+const categories = [
+  { id: 'voirie', icon: '🛣️', label: 'Voirie', tools: [
+    { id: 'route',         icon: '🛣️', label: 'Route' },
+    { id: 'rond_point',    icon: '⭕', label: 'Rond-point' },
+    { id: 'hachures',      icon: '📐', label: 'Zébras / Hachures' },
+    { id: 'stationnement', icon: '🅿️', label: 'Stationnement' },
+  ]},
+  { id: 'mobilite', icon: '🚴', label: 'Mobilités', tools: [
+    { id: 'piste_cyclable', icon: '🚴', label: 'Piste cycl.' },
+    { id: 'bande_cyclable', icon: '🚲', label: 'Bande cyclable' },
+    { id: 'chevron_velo',   icon: '˄˄', label: 'Chevrons vélo' },
+    { id: 'rue_cyclable',   icon: 'Ⓑ', label: 'Rue cyclable' },
+    { id: 'chemin_pieton',  icon: '🧱', label: 'Chemin piéton' },
+  ]},
+  { id: 'marquages', icon: '🚸', label: 'Marquages', tools: [
+    { id: 'passage_pieton',   icon: '🚸', label: 'Pass. piéton' },
+    { id: 'cedez_le_passage', icon: '🔻', label: 'Cédez-le-passage' },
+    { id: 'ligne_stop',       icon: '🛑', label: 'Ligne de stop' },
+    { id: 'stop_sol',         icon: '🅢', label: 'STOP au sol' },
+    { id: 'fleche_sol',       icon: '⬆️', label: 'Flèche directionnelle' },
+  ]},
+  { id: 'signal', icon: '🚦', label: 'Signalisation', tools: [
+    { id: 'feu_tricolore',  icon: '🚦', label: 'Feu tricolore' },
+    { id: 'feu_clignotant', icon: '🟡', label: 'Feu clignotant' },
+  ]},
+  { id: 'vegetal', icon: '🌿', label: 'Végétation', tools: [
+    { id: 'espace_vert', icon: '🌿', label: 'Espace vert' },
+    { id: 'massif',      icon: '🌳', label: 'Massif' },
+    { id: 'arbre',       icon: '🌲', label: 'Arbre isolé' },
+  ]},
+  { id: 'outils', icon: '✏️', label: 'Outils', tools: [
+    { id: 'edit',   icon: '✏️', label: 'Éditer le tracé',        cls: 'edit-btn' },
+    { id: 'branch', icon: '🔀', label: 'Ajouter une branche',    cls: 'branch-btn' },
+    { id: 'delete', icon: '🗑️', label: 'Supprimer un élément',   cls: 'delete-btn' },
+  ]},
+]
+
+const toolsById = {}
+categories.forEach(c => c.tools.forEach(t => { toolsById[t.id] = { ...t, cat: c.id } }))
+
+const currentCategory = computed(() => categories.find(c => c.id === activeCat.value) || categories[0])
+const activeToolInfo = computed(() => toolsById[uiTool.value] || { icon: '', label: '' })
+
+/* ============================================================
+   PROPRIÉTÉS PAR TYPE
+   Les id sont identiques à l'ancienne version (render.js peut
+   donc continuer à lire byId('set-...')).
+   ============================================================ */
+const ROUTE_TOOLS = ['route', 'branch']
+const SMOOTH_TOOLS = ['route', 'branch', 'piste_cyclable', 'chemin_pieton', 'bande_cyclable', 'rue_cyclable', 'stationnement']
+const CYCLE_TOOLS = ['piste_cyclable', 'bande_cyclable']
+
+const settingsValues = reactive({
+  'set-smooth-curves': false,
+  'set-route-width': 6,
+  'set-route-lanes': 2,
+  'set-route-direction': 'bidirectional',
+  'set-route-linecap': 'round',
+  'set-roundabout-radius': 12,
+  'set-roundabout-lanes': 2,
+  'set-hatch-width': 1.5,
+  'set-hatch-style': 'straight',
+  'set-cycle-width': 2,
+  'set-cycle-color': '#3c8a3c',
+  'set-cycle-direction': 'unidirectional',
+  'set-ped-width': 2.5,
+  'set-park-layout': 'bataille',
+  'set-park-depth': 5,
+  'set-park-bay': 2.5,
+  'set-cross-span': 3.5,
+  'set-cross-stripe': 0.5,
+  'set-arrow-type': 'tout_droit',
+  'set-tree-radius': 2.2
+})
+
+const fields = [
+  // Commun aux tracés
+  { id: 'set-smooth-curves', label: 'Lissage des tracés (courbes de Bézier)', type: 'checkbox', def: false, tools: SMOOTH_TOOLS },
+
+  // Route (et branche, qui crée une route)
+  { id: 'set-route-width',     label: 'Largeur route (m)', type: 'number', def: 6, min: 2, max: 20, step: 0.5, tools: ROUTE_TOOLS },
+  { id: 'set-route-lanes',     label: 'Nombre de voies',   type: 'number', def: 2, min: 1, max: 6,  step: 1,   tools: ROUTE_TOOLS },
+  { id: 'set-route-direction', label: 'Sens de circulation', type: 'select', def: 'bidirectional', tools: ROUTE_TOOLS,
+    options: [['bidirectional', 'Bidirectionnelle'], ['unidirectional', 'Sens unique']] },
+  { id: 'set-route-linecap',   label: 'Terminaison route', type: 'select', def: 'round', tools: ROUTE_TOOLS,
+    options: [['round', 'Ronde'], ['butt', 'Carrée (nette)']] },
+
+  // Rond-point
+  { id: 'set-roundabout-radius', label: 'Rayon rond-point (m)',  type: 'number', def: 12, min: 5, max: 40, step: 1, tools: ['rond_point'] },
+  { id: 'set-roundabout-lanes',  label: 'Voies du rond-point',   type: 'number', def: 2,  min: 1, max: 4,  step: 1, tools: ['rond_point'] },
+
+  // Zébras
+  { id: 'set-hatch-width', label: 'Largeur zébras (m)', type: 'number', def: 1.5, min: 0.5, max: 4, step: 0.25, tools: ['hachures'] },
+  { id: 'set-hatch-style', label: 'Forme zébras', type: 'select', def: 'straight', tools: ['hachures'],
+    options: [['straight', 'Angles droits (Net)'], ['smooth', 'Arrondis']] },
+
+  // Piste / bande cyclable
+  { id: 'set-cycle-width',     label: 'Largeur piste cyclable (m)', type: 'number', def: 2, min: 1, max: 6, step: 0.5, tools: CYCLE_TOOLS },
+  { id: 'set-cycle-color',     label: 'Couleur piste cyclable',     type: 'color',  def: '#3c8a3c', tools: CYCLE_TOOLS },
+  { id: 'set-cycle-direction', label: 'Sens piste cyclable', type: 'select', def: 'unidirectional', tools: CYCLE_TOOLS,
+    options: [['unidirectional', 'Unidirectionnelle'], ['bidirectional', 'Bidirectionnelle']] },
+
+  // Chemin piéton
+  { id: 'set-ped-width', label: 'Largeur chemin piéton (m)', type: 'number', def: 2.5, min: 1, max: 8, step: 0.5, tools: ['chemin_pieton'] },
+
+  // Stationnement
+  { id: 'set-park-layout', label: 'Type stationnement', type: 'select', def: 'bataille', tools: ['stationnement'],
+    options: [['bataille', 'Bataille (90°)'], ['epi', 'Épi (45°)'], ['creneau', 'Créneau (Parallèle)']] },
+  { id: 'set-park-depth', label: 'Profondeur place (m)', type: 'number', def: 5,   min: 1.5, max: 8, step: 0.5, tools: ['stationnement'] },
+  { id: 'set-park-bay',   label: 'Largeur place (m)',    type: 'number', def: 2.5, min: 1.5, max: 5, step: 0.1, tools: ['stationnement'] },
+
+  // Passage piéton
+  { id: 'set-cross-span',   label: 'Largeur passage piéton (m)', type: 'number', def: 3.5, min: 2,   max: 10, step: 0.5, tools: ['passage_pieton'] },
+  { id: 'set-cross-stripe', label: 'Largeur bandes piéton (m)',  type: 'number', def: 0.5, min: 0.3, max: 1,  step: 0.1, tools: ['passage_pieton'] },
+
+  // Flèche au sol
+  { id: 'set-arrow-type', label: 'Type de flèche au sol', type: 'select', def: 'tout_droit', tools: ['fleche_sol'],
+    options: [
+      ['tout_droit', 'Tout droit'], ['gauche', 'Tourne à gauche'], ['droite', 'Tourne à droite'],
+      ['tout_droit_gauche', 'Tout droit + gauche'], ['tout_droit_droite', 'Tout droit + droite']
+    ] },
+
+  // Arbre
+  { id: 'set-tree-radius', label: 'Rayon houppier arbre (m)', type: 'number', def: 2.2, min: 1, max: 8, step: 0.2, tools: ['arbre'] },
+]
+
+const hasFieldsForTool = computed(() => fields.some(f => f.tools.includes(uiTool.value)))
+
+/* ============================================================
+   DONNÉES & ÉTAT (moteur de dessin)
    ============================================================ */
 let elements = []
 let idCounter = 1
@@ -209,7 +325,7 @@ const instructions = {
   passage_pieton: 'Cliquez le point de départ puis le point d\'arrivée du passage piéton (2 clics).',
   cedez_le_passage:'Cliquez les deux extrémités de la ligne de cédez-le-passage (2 clics).',
   ligne_stop:     'Cliquez les deux extrémités de la ligne de stop continue (2 clics).',
-  stop_sol:       'Cliquez le point de départ puis un point indiquant le sens de circulation (2 clics).',
+  stop_sol:       'Cliquez le point de départ puis un point indiquant le sens de circulation (3 clics).',
   fleche_sol:     'Cliquez le point de départ (arrière de la flèche) puis un point indiquant le sens de circulation (2 clics).',
   bande_cyclable: 'Cliquez pour tracer la bande cyclable peinte sur chaussée. Validez avec Entrée.',
   chevron_velo:   'Cliquez le point de départ puis un point indiquant le sens de circulation (2 clics).',
@@ -253,18 +369,41 @@ const zOrderBase = {
    ============================================================ */
 function byId(id){ return root.value.querySelector('#' + id) }
 
-/* animate ligh */ 
+/* ============================================================
+   ANIMATION DES FEUX CLIGNOTANTS
+   ============================================================ */
 let blinkState = true
 let blinkAnimationId = null
+let blinkTimeoutId = null
 
 function animateBlinkingLights() {
   blinkState = !blinkState
   draw()
   blinkAnimationId = requestAnimationFrame(() => {
-    setTimeout(animateBlinkingLights, 500)
+    blinkTimeoutId = setTimeout(animateBlinkingLights, 500)
   })
 }
 
+/* ============================================================
+   SÉLECTION (synchronise l'état réactif de l'UI)
+   ============================================================ */
+function setSelected(el){
+  selectedElementForEdit = el
+  hasSelection.value = !!el
+  if(el){
+    if(el.z === undefined) el.z = zOrderBase[el.type] || 0
+    selectedZ.value = el.z
+    selectedType.value = (toolsById[el.type] && toolsById[el.type].label) || el.type
+  }
+}
+
+function onZInput(e){
+  if(selectedElementForEdit){
+    selectedElementForEdit.z = parseInt(e.target.value) || 0
+    selectedZ.value = selectedElementForEdit.z
+    draw()
+  }
+}
 
 /* ============================================================
    OUTILS / INTERACTIONS
@@ -272,49 +411,49 @@ function animateBlinkingLights() {
 function readSettingsForType(type){
   switch(type){
     case 'route': return {
-      width: parseFloat(byId('set-route-width').value)||6,
-      lanes: parseInt(byId('set-route-lanes').value)||2,
-      direction: byId('set-route-direction').value,
-      lineCap: byId('set-route-linecap').value,
-      smooth: byId('set-smooth-curves').checked
+      width: settingsValues['set-route-width'],
+      lanes: settingsValues['set-route-lanes'],
+      direction: settingsValues['set-route-direction'],
+      lineCap: settingsValues['set-route-linecap'],
+      smooth: settingsValues['set-smooth-curves']
     }
     case 'piste_cyclable': return {
-      width: parseFloat(byId('set-cycle-width').value)||2,
-      color: byId('set-cycle-color').value,
-      direction: byId('set-cycle-direction').value,
-      smooth: byId('set-smooth-curves').checked
+      width: settingsValues['set-cycle-width'],
+      color: settingsValues['set-cycle-color'],
+      direction: settingsValues['set-cycle-direction'],
+      smooth: settingsValues['set-smooth-curves']
     }
     case 'chemin_pieton': return {
-      width: parseFloat(byId('set-ped-width').value)||2.5,
-      smooth: byId('set-smooth-curves').checked
+      width: settingsValues['set-ped-width'],
+      smooth: settingsValues['set-smooth-curves']
     }
     case 'bande_cyclable': return {
-      width: parseFloat(byId('set-cycle-width').value)||2,
-      color: byId('set-cycle-color').value,
-      direction: byId('set-cycle-direction').value,
-      smooth: byId('set-smooth-curves').checked
+      width: settingsValues['set-cycle-width'],
+      color: settingsValues['set-cycle-color'],
+      direction: settingsValues['set-cycle-direction'],
+      smooth: settingsValues['set-smooth-curves']
     }
-    case 'rue_cyclable': return { smooth: byId('set-smooth-curves').checked }
-    case 'fleche_sol': return { arrowType: byId('set-arrow-type').value }
+    case 'rue_cyclable': return { smooth: settingsValues['set-smooth-curves'] }
+    case 'fleche_sol': return { arrowType: settingsValues['set-arrow-type'] }
     case 'rond_point': return {
-      radius: parseFloat(byId('set-roundabout-radius').value)||12,
-      lanes: parseInt(byId('set-roundabout-lanes').value)||2
+      radius: settingsValues['set-roundabout-radius'],
+      lanes: settingsValues['set-roundabout-lanes']
     }
     case 'hachures': return {
-      hatchWidth: parseFloat(byId('set-hatch-width').value)||1.5,
-      cornerStyle: byId('set-hatch-style').value
+      hatchWidth: settingsValues['set-hatch-width'],
+      cornerStyle: settingsValues['set-hatch-style']
     }
     case 'stationnement': return {
-      layout: byId('set-park-layout').value,
-      bay: parseFloat(byId('set-park-bay').value)||2.5,
-      depth: parseFloat(byId('set-park-depth').value)||5,
-      smooth: byId('set-smooth-curves').checked
+      layout: settingsValues['set-park-layout'],
+      bay: settingsValues['set-park-bay'],
+      depth: settingsValues['set-park-depth'],
+      smooth: settingsValues['set-smooth-curves']
     }
     case 'passage_pieton': return {
-      span: parseFloat(byId('set-cross-span').value)||3.5,
-      stripeWidth: parseFloat(byId('set-cross-stripe').value)||0.5
+      span: settingsValues['set-cross-span'],
+      stripeWidth: settingsValues['set-cross-stripe']
     }
-    case 'arbre': return { radius: parseFloat(byId('set-tree-radius').value)||2.2 }
+    case 'arbre': return { radius: settingsValues['set-tree-radius'] }
     default: return {}
   }
 }
@@ -326,38 +465,39 @@ function addElement(type, coords){
   draw()
 }
 
+function onToolClick(id){
+  selectTool(currentTool === id ? null : id)
+}
+
 function selectTool(name){
   currentTool = name
+  uiTool.value = name
   drawingPoints = []
-  if(name !== 'edit'){
-    selectedElementForEdit = null
-    byId('edit-z-row').style.display = 'none'
-  }
+  if(name && toolsById[name]) activeCat.value = toolsById[name].cat
+  if(name !== 'edit'){ setSelected(null) }
   if(name !== 'branch'){ branchSourceNode = null }
-  root.value.querySelectorAll('.tool-btn').forEach(b=> b.classList.toggle('active', b.dataset.tool===name))
   map.getContainer().style.cursor = name ? 'crosshair' : ''
   updateStatus()
   draw()
 }
 
 function updateStatus(){
-  const s = byId('status-bar')
-  if(!currentTool){ s.innerHTML = 'Sélectionnez un équipement ou un marquage dans la liste pour commencer.'; return }
+  if(!currentTool){ statusHtml.value = 'Choisissez une catégorie, puis un équipement ou un marquage dans le dock.'; return }
   let txt = instructions[currentTool] || ''
   if(currentTool === 'edit' && selectedElementForEdit){
-    txt = `Élément sélectionné (Type: ${selectedElementForEdit.type}, Z: ${selectedElementForEdit.z}). Glissez une poignée ou ajustez la valeur Z dans les paramètres.`
+    txt = `Élément sélectionné (Type: ${selectedElementForEdit.type}, Z: ${selectedElementForEdit.z}). Glissez une poignée ou ajustez la valeur Z dans le panneau.`
   } else if(currentTool === 'branch' && branchSourceNode){
     txt = 'Nœud de départ sélectionné. Cliquez sur la carte pour tracer la nouvelle branche. Validez avec Entrée.'
   } else if(drawingPoints.length>0 && toolConfig[currentTool] && toolConfig[currentTool].mode!=='point'){
-    txt += `<br><strong>${drawingPoints.length}</strong> point(s) placé(s).`
+    txt += ` <strong>${drawingPoints.length}</strong> point(s) placé(s).`
   }
-  s.innerHTML = txt
+  statusHtml.value = txt
 }
 
 function finalizeDrawing(){
   const cfg = toolConfig[currentTool]
   if(!cfg || cfg.mode==='point' || cfg.mode==='edit') return
-  // remove the last point when double click
+  // retire le dernier point lors d'un double-clic
   if (['line', 'polygon', 'branch'].includes(cfg.mode) && drawingPoints.length > cfg.minPoints) {
     drawingPoints.pop()
   }
@@ -375,11 +515,20 @@ function finalizeDrawing(){
 
 function cancelDrawing(){
   drawingPoints = []
-  selectedElementForEdit = null
+  setSelected(null)
   branchSourceNode = null
-  byId('edit-z-row').style.display = 'none'
   updateStatus()
   draw()
+}
+
+function clearAll(){
+  if(elements.length===0) return
+  if(confirm('Effacer tous les éléments du projet ? Cette action est irréversible.')){
+    elements = []
+    setSelected(null)
+    branchSourceNode = null
+    draw()
+  }
 }
 
 /* Trouve l'élément le plus proche d'un point écran (factorisé : edit + delete) */
@@ -404,10 +553,7 @@ function deleteNearElement(containerPoint){
   const best = findNearestElement(containerPoint)
   if(best){
     elements = elements.filter(e=>e!==best)
-    if(selectedElementForEdit === best){
-      selectedElementForEdit = null
-      byId('edit-z-row').style.display = 'none'
-    }
+    if(selectedElementForEdit === best){ setSelected(null) }
     draw()
   }
 }
@@ -417,16 +563,7 @@ function onMapClick(ev){
   if(currentTool==='delete'){ deleteNearElement(ev.containerPoint); return }
 
   if(currentTool==='edit'){
-    selectedElementForEdit = findNearestElement(ev.containerPoint)
-    if(selectedElementForEdit){
-      if(selectedElementForEdit.z === undefined){
-        selectedElementForEdit.z = zOrderBase[selectedElementForEdit.type] || 0
-      }
-      byId('edit-z-row').style.display = 'flex'
-      byId('set-selected-z').value = selectedElementForEdit.z
-    } else {
-      byId('edit-z-row').style.display = 'none'
-    }
+    setSelected(findNearestElement(ev.containerPoint))
     updateStatus()
     draw()
     return
@@ -518,7 +655,6 @@ function onWindowResize(){ if(map) map.invalidateSize() }
 /* ============================================================
    CYCLE DE VIE VUE
    ============================================================ */
-
 onMounted(()=>{
   map = L.map(mapEl.value, {
     doubleClickZoom: false,
@@ -528,9 +664,8 @@ onMounted(()=>{
     maxZoom: 21
   })
   L.tileLayer(TILE_URL, TILE_OPTS).addTo(map)
-  L.control.scale({metric:true, imperial:false}).addTo(map)
-
-  animateBlinkingLights()
+  // échelle à droite pour ne pas passer sous le dock centré
+  L.control.scale({metric:true, imperial:false, position:'bottomright'}).addTo(map)
 
   overlay = document.createElement('canvas')
   overlay.className = 'up-overlay-canvas'
@@ -553,7 +688,9 @@ onMounted(()=>{
       cp
     })
   })
-  
+
+  animateBlinkingLights()
+
   map.on('resize', resizeOverlay)
   map.on('move', draw)
   map.on('moveend', draw)
@@ -568,34 +705,6 @@ onMounted(()=>{
   window.addEventListener('resize', onWindowResize)
   document.addEventListener('keydown', onKeyDown)
 
-  root.value.querySelectorAll('.tool-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      selectTool(currentTool === btn.dataset.tool ? null : btn.dataset.tool)
-    })
-  })
-  byId('btn-validate').addEventListener('click', finalizeDrawing)
-  byId('btn-cancel').addEventListener('click', cancelDrawing)
-  byId('btn-clear-all').addEventListener('click', ()=>{
-    if(elements.length===0) return
-    if(confirm('Effacer tous les éléments du projet ? Cette action est irréversible.')){
-      elements = []
-      selectedElementForEdit = null
-      byId('edit-z-row').style.display = 'none'
-      branchSourceNode = null
-      draw()
-    }
-  })
-  byId('set-selected-z').addEventListener('input', (e)=>{
-    if(selectedElementForEdit){
-      selectedElementForEdit.z = parseInt(e.target.value) || 0
-      draw()
-    }
-  })
-  root.value.querySelectorAll('.sb-section input:not(#set-selected-z), .sb-section select').forEach(inp=>{
-    inp.addEventListener('input', draw)
-    inp.addEventListener('change', draw)
-  })
-
   updateStatus()
   map.whenReady(resizeOverlay)
   setTimeout(resizeOverlay, 200)
@@ -604,11 +713,10 @@ onMounted(()=>{
 onBeforeUnmount(()=>{
   window.removeEventListener('resize', onWindowResize)
   document.removeEventListener('keydown', onKeyDown)
+  if (blinkAnimationId) cancelAnimationFrame(blinkAnimationId)
+  if (blinkTimeoutId) clearTimeout(blinkTimeoutId)
   if(map){ map.remove(); map = null }
   overlay = null
   ctx = null
-  if (blinkAnimationId) {
-    cancelAnimationFrame(blinkAnimationId)
-  }
 })
 </script>
