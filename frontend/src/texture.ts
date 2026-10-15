@@ -5,7 +5,7 @@ export interface Patterns {
   pavementPattern: CanvasPattern
 }
 
-function seededRandom(seed: number): () => number {
+function seededRandom (seed: number): () => number {
   let s = seed
   return function () {
     s = (s * 9301 + 49297) % 233280
@@ -13,7 +13,7 @@ function seededRandom(seed: number): () => number {
   }
 }
 
-function makeTile(
+function makeTile (
   size: number,
   drawFn: (ctx: CanvasRenderingContext2D, size: number) => void
 ): HTMLCanvasElement {
@@ -22,7 +22,7 @@ function makeTile(
   c.height = size
 
   const tileCtx = c.getContext('2d')
-  if (!tileCtx) {
+  if (tileCtx == null) {
     throw new Error('Impossible de créer le contexte 2D de la tuile')
   }
 
@@ -31,20 +31,20 @@ function makeTile(
 }
 
 /** createPattern() peut renvoyer null : on le transforme en erreur explicite. */
-function requirePattern(
+function requirePattern (
   ctx: CanvasRenderingContext2D,
   tile: HTMLCanvasElement,
   name: string
 ): CanvasPattern {
   const pattern = ctx.createPattern(tile, 'repeat')
-  if (!pattern) {
+  if (pattern == null) {
     throw new Error(`Échec de création de la texture : ${name}`)
   }
   return pattern
 }
 
-function buildPatterns(ctx: CanvasRenderingContext2D): Patterns {
-  if (!ctx) {
+function buildPatterns (ctx: CanvasRenderingContext2D): Patterns {
+  if (ctx != null) {
     throw new Error('Contexte Canvas principal manquant')
   }
 
@@ -115,7 +115,7 @@ function buildPatterns(ctx: CanvasRenderingContext2D): Patterns {
     asphaltPattern: requirePattern(ctx, asphaltTile, 'asphaltPattern'),
     grassPattern: requirePattern(ctx, grassTile, 'grassPattern'),
     bushPattern: requirePattern(ctx, bushTile, 'bushPattern'),
-    pavementPattern: requirePattern(ctx, pavementTile, 'pavementPattern'),
+    pavementPattern: requirePattern(ctx, pavementTile, 'pavementPattern')
   }
 }
 

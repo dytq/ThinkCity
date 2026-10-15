@@ -1,4 +1,4 @@
-import type { Map as LeafletMap } from "leaflet"
+import type { Map as LeafletMap } from 'leaflet'
 
 import {
   cp,
@@ -7,46 +7,46 @@ import {
   catmullRomSpline,
   smoothIfNeeded,
   walkPath,
-  offsetPolyline,
-} from "./geometry.js"
-import type { Pt, LatLngLike } from "./geometry.js"
+  offsetPolyline
+} from './geometry.js'
+import type { Pt, LatLngLike } from './geometry.js'
 
-import { buildPatterns } from "./texture.ts"
+import { buildPatterns } from './texture.ts'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                              */
 /* ------------------------------------------------------------------ */
 
 export type ElementType =
-  | "espace_vert"
-  | "massif"
-  | "hachures"
-  | "chemin_pieton"
-  | "piste_cyclable"
-  | "bande_cyclable"
-  | "rue_cyclable"
-  | "route"
-  | "rond_point"
-  | "stationnement"
-  | "passage_pieton"
-  | "cedez_le_passage"
-  | "ligne_stop"
-  | "stop_sol"
-  | "fleche_sol"
-  | "chevron_velo"
-  | "arbre"
-  | "feu_clignotant"
-  | "feu_tricolore"
+  | 'espace_vert'
+  | 'massif'
+  | 'hachures'
+  | 'chemin_pieton'
+  | 'piste_cyclable'
+  | 'bande_cyclable'
+  | 'rue_cyclable'
+  | 'route'
+  | 'rond_point'
+  | 'stationnement'
+  | 'passage_pieton'
+  | 'cedez_le_passage'
+  | 'ligne_stop'
+  | 'stop_sol'
+  | 'fleche_sol'
+  | 'chevron_velo'
+  | 'arbre'
+  | 'feu_clignotant'
+  | 'feu_tricolore'
 
-export type Direction = "unidirectional" | "bidirectional"
-export type ParkingLayout = "bataille" | "epi" | "creneau"
-export type CornerStyle = "straight" | "smooth"
+export type Direction = 'unidirectional' | 'bidirectional'
+export type ParkingLayout = 'bataille' | 'epi' | 'creneau'
+export type CornerStyle = 'straight' | 'smooth'
 export type ArrowType =
-  | "tout_droit"
-  | "gauche"
-  | "droite"
-  | "tout_droit_gauche"
-  | "tout_droit_droite"
+  | 'tout_droit'
+  | 'gauche'
+  | 'droite'
+  | 'tout_droit_gauche'
+  | 'tout_droit_droite'
 
 export interface MapElement {
   type: ElementType
@@ -70,7 +70,7 @@ export interface MapElement {
 }
 
 export interface ToolConfigEntry {
-  mode?: "point" | "edit" | string
+  mode?: 'point' | 'edit' | string
 }
 
 export interface RenderState {
@@ -106,7 +106,7 @@ let overlayRef: HTMLCanvasElement | null = null
 let drawingPointsRef: LatLngLike[] = []
 let mapRef: LeafletMap | null = null
 // Initialisé par initRender() ; draw() vérifie quand même qu'il est défini.
-let ctxRef: CanvasRenderingContext2D = null!
+let ctxRef: CanvasRenderingContext2D
 let elementsRef: MapElement[] = []
 let selectedElementForEditRef: MapElement | null = null
 let currentToolRef: string | null = null
@@ -145,14 +145,17 @@ const zOrderBase: Record<ElementType, number> = {
   chevron_velo: 15,
   arbre: 16,
   feu_clignotant: 17,
-  feu_tricolore: 18,
+  feu_tricolore: 18
 }
 
 /* ------------------------------------------------------------------ */
 /* Init / sync                                                        */
 /* ------------------------------------------------------------------ */
 
-function initRender({ overlay, map, ctx, getState }: RenderInit): void {
+function initRender ({ overlay, map, ctx, getState }: RenderInit): void {
+  if (ctx == null) {
+    throw new Error('Impossible d’initialiser le contexte Canvas 2D')
+  }
   overlayRef = overlay
   mapRef = map
   ctxRef = ctx
@@ -161,8 +164,8 @@ function initRender({ overlay, map, ctx, getState }: RenderInit): void {
   ;({ asphaltPattern, grassPattern, bushPattern, pavementPattern } = patterns)
 }
 
-function syncRenderState(): void {
-  if (!getStateRef) return
+function syncRenderState (): void {
+  if (getStateRef == null) return
 
   const state = getStateRef()
 
@@ -175,18 +178,18 @@ function syncRenderState(): void {
   byId = state.byId
 }
 
-function resizeOverlay(): void {
-  if (!mapRef || !overlayRef) return
+function resizeOverlay (): void {
+  if ((mapRef == null) || (overlayRef == null)) return
   const size = mapRef.getSize()
   overlayRef.width = size.x
   overlayRef.height = size.y
   draw()
 }
 
-function draw(): void {
+function draw (): void {
   syncRenderState()
 
-  if (!overlayRef || !ctxRef || !elementsRef) return
+  if ((overlayRef == null) || ctxRef == null || elementsRef == null) return
   if (overlayRef.width === 0 || overlayRef.height === 0) return
 
   ctxRef.clearRect(0, 0, overlayRef.width, overlayRef.height)
@@ -197,25 +200,25 @@ function draw(): void {
   })
   sorted.forEach((e) => {
     switch (e.type) {
-      case "espace_vert":      drawGreenSpace(e); break
-      case "massif":           drawBushMass(e); break
-      case "hachures":         drawHatchZone(e); break
-      case "chemin_pieton":    drawPedestrianPath(e); break
-      case "piste_cyclable":   drawCyclePath(e); break
-      case "bande_cyclable":   drawPaintedCycleLane(e); break
-      case "rue_cyclable":     drawCycleStreet(e); break
-      case "route":            drawRoad(e); break
-      case "rond_point":       drawRoundabout(e); break
-      case "stationnement":    drawParking(e); break
-      case "passage_pieton":   drawCrossing(e); break
-      case "cedez_le_passage": drawYieldLine(e); break
-      case "ligne_stop":       drawStopLine(e); break
-      case "stop_sol":         drawGroundStop(e); break
-      case "fleche_sol":       drawGroundArrow(e); break
-      case "chevron_velo":     drawSharrow(e); break
-      case "arbre":            drawTree(e); break
-      case "feu_clignotant":   drawBlinkingLight(e); break
-      case "feu_tricolore":    drawTrafficLight(e); break
+      case 'espace_vert': drawGreenSpace(e); break
+      case 'massif': drawBushMass(e); break
+      case 'hachures': drawHatchZone(e); break
+      case 'chemin_pieton': drawPedestrianPath(e); break
+      case 'piste_cyclable': drawCyclePath(e); break
+      case 'bande_cyclable': drawPaintedCycleLane(e); break
+      case 'rue_cyclable': drawCycleStreet(e); break
+      case 'route': drawRoad(e); break
+      case 'rond_point': drawRoundabout(e); break
+      case 'stationnement': drawParking(e); break
+      case 'passage_pieton': drawCrossing(e); break
+      case 'cedez_le_passage': drawYieldLine(e); break
+      case 'ligne_stop': drawStopLine(e); break
+      case 'stop_sol': drawGroundStop(e); break
+      case 'fleche_sol': drawGroundArrow(e); break
+      case 'chevron_velo': drawSharrow(e); break
+      case 'arbre': drawTree(e); break
+      case 'feu_clignotant': drawBlinkingLight(e); break
+      case 'feu_tricolore': drawTrafficLight(e); break
     }
   })
   drawEditHandles()
@@ -227,25 +230,25 @@ function draw(): void {
 /* Mobilier / signalisation                                           */
 /* ------------------------------------------------------------------ */
 
-function drawBlinkingLight(e: MapElement): void {
+function drawBlinkingLight (e: MapElement): void {
   const coord = e.coords[0]
-  if (!coord) return
-  
+  if (coord == null) return
+
   const p = cp(coord)
-  
+
   const isBlinkingOn = Math.floor(Date.now() / 400) % 2 === 0
 
   ctxRef.save()
 
-  ctxRef.strokeStyle = "#333333"
+  ctxRef.strokeStyle = '#333333'
   ctxRef.lineWidth = 3
   ctxRef.beginPath()
   ctxRef.moveTo(p.x, p.y + 10)
   ctxRef.lineTo(p.x, p.y - 12)
   ctxRef.stroke()
 
-  ctxRef.fillStyle = "#1a1a1a"
-  ctxRef.strokeStyle = "#444"
+  ctxRef.fillStyle = '#1a1a1a'
+  ctxRef.strokeStyle = '#444'
   ctxRef.lineWidth = 1
   ctxRef.fillRect(p.x - 6, p.y - 24, 12, 16)
   ctxRef.strokeRect(p.x - 6, p.y - 24, 12, 16)
@@ -253,27 +256,27 @@ function drawBlinkingLight(e: MapElement): void {
   if (isBlinkingOn) {
     ctxRef.beginPath()
     ctxRef.arc(p.x, p.y - 16, 12, 0, Math.PI * 2)
-    ctxRef.fillStyle = "rgba(255, 204, 0, 0.35)"
+    ctxRef.fillStyle = 'rgba(255, 204, 0, 0.35)'
     ctxRef.fill()
   }
 
   ctxRef.beginPath()
   ctxRef.arc(p.x, p.y - 16, 4.5, 0, Math.PI * 2)
-  ctxRef.fillStyle = isBlinkingOn ? "#ffcc00" : "#665200"
+  ctxRef.fillStyle = isBlinkingOn ? '#ffcc00' : '#665200'
   ctxRef.fill()
 
-  ctxRef.strokeStyle = "#ffffff"
+  ctxRef.strokeStyle = '#ffffff'
   ctxRef.lineWidth = 1.2
   ctxRef.stroke()
 
   ctxRef.restore()
 }
 
-function drawEditHandles(): void {
-  if (!selectedElementForEditRef) return
+function drawEditHandles (): void {
+  if (selectedElementForEditRef == null) return
   ctxRef.save()
-  ctxRef.fillStyle = "#ff9d3d"
-  ctxRef.strokeStyle = "#ffffff"
+  ctxRef.fillStyle = '#ff9d3d'
+  ctxRef.strokeStyle = '#ffffff'
   ctxRef.lineWidth = 2
   selectedElementForEditRef.coords.forEach((coord) => {
     const p = cp(coord)
@@ -285,14 +288,14 @@ function drawEditHandles(): void {
   ctxRef.restore()
 }
 
-function drawBranchNodesOverlay(): void {
-  if (currentToolRef !== "branch") return
+function drawBranchNodesOverlay (): void {
+  if (currentToolRef !== 'branch') return
   ctxRef.save()
-  ctxRef.fillStyle = "#3cb371"
-  ctxRef.strokeStyle = "#ffffff"
+  ctxRef.fillStyle = '#3cb371'
+  ctxRef.strokeStyle = '#ffffff'
   ctxRef.lineWidth = 2
   elementsRef.forEach((e) => {
-    if (["route", "piste_cyclable", "chemin_pieton"].includes(e.type)) {
+    if (['route', 'piste_cyclable', 'chemin_pieton'].includes(e.type)) {
       e.coords.forEach((coord) => {
         const p = cp(coord)
         ctxRef.beginPath()
@@ -309,24 +312,24 @@ function drawBranchNodesOverlay(): void {
 /* Routes                                                             */
 /* ------------------------------------------------------------------ */
 
-function drawRoad(e: MapElement): void {
+function drawRoad (e: MapElement): void {
   let pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   pts = smoothIfNeeded(e, pts, false)
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const lat = coord.lat
-  const lanes = Math.max(1, Math.round(e.lanes || 2))
-  const bidirectional = e.direction !== "unidirectional"
-  const widthPx = Math.max(4, metersToPixels(e.width || 6, lat))
-  const lineCapStyle: CanvasLineCap = e.lineCap || "round"
+  const lanes = Math.max(1, Math.round(e.lanes ?? 2))
+  const bidirectional = e.direction !== 'unidirectional'
+  const widthPx = Math.max(4, metersToPixels(e.width ?? 6, lat))
+  const lineCapStyle: CanvasLineCap = e.lineCap ?? 'round'
 
   ctxRef.save()
-  ctxRef.lineJoin = "round"
+  ctxRef.lineJoin = 'round'
   ctxRef.lineCap = lineCapStyle
 
   pathFromPoints(pts)
-  ctxRef.strokeStyle = "#2c2c2c"
+  ctxRef.strokeStyle = '#2c2c2c'
   ctxRef.lineWidth = widthPx
   ctxRef.stroke()
 
@@ -355,21 +358,21 @@ function drawRoad(e: MapElement): void {
     const offsetPts = offsetPolyline(pts, frac * widthPx)
     ctxRef.beginPath()
     const offsetPtsFirst = offsetPts[0]
-    if (!offsetPtsFirst) return
+    if (offsetPtsFirst == null) return
     ctxRef.moveTo(offsetPtsFirst.x, offsetPtsFirst.y)
     for (let k = 1; k < offsetPts.length; k++) {
       const offsetPtsK = offsetPts[k]
-      if (!offsetPtsK) continue;
+      if (offsetPtsK == null) continue
       ctxRef.lineTo(offsetPtsK.x, offsetPtsK.y)
     }
     if (idx === centerIdx) {
       ctxRef.setLineDash([])
-      ctxRef.strokeStyle = "#ffffff"
+      ctxRef.strokeStyle = '#ffffff'
       ctxRef.lineWidth = Math.max(1.6, widthPx * 0.045)
       ctxRef.stroke()
     } else {
       ctxRef.setLineDash([metersToPixels(3, lat), metersToPixels(3, lat)])
-      ctxRef.strokeStyle = "#ffffff"
+      ctxRef.strokeStyle = '#ffffff'
       ctxRef.lineWidth = Math.max(1.2, widthPx * 0.03)
       ctxRef.stroke()
       ctxRef.setLineDash([])
@@ -382,7 +385,7 @@ function drawRoad(e: MapElement): void {
   ctxRef.restore()
 }
 
-function drawRoadArrows(pts: Pt[], widthPx: number, lanes: number, lat: number): void {
+function drawRoadArrows (pts: Pt[], widthPx: number, lanes: number, lat: number): void {
   const step = metersToPixels(22, lat)
   if (step < 12) return
   for (let l = 0; l < lanes; l++) {
@@ -394,12 +397,12 @@ function drawRoadArrows(pts: Pt[], widthPx: number, lanes: number, lat: number):
   }
 }
 
-function drawArrowIcon(p: Pt, angle: number, size: number): void {
+function drawArrowIcon (p: Pt, angle: number, size: number): void {
   ctxRef.save()
   ctxRef.translate(p.x, p.y)
   ctxRef.rotate(angle)
-  ctxRef.strokeStyle = "rgba(255,255,255,0.9)"
-  ctxRef.fillStyle = "rgba(255,255,255,0.9)"
+  ctxRef.strokeStyle = 'rgba(255,255,255,0.9)'
+  ctxRef.fillStyle = 'rgba(255,255,255,0.9)'
   ctxRef.lineWidth = Math.max(1, size * 0.18)
   ctxRef.beginPath()
   ctxRef.moveTo(-size, 0)
@@ -414,19 +417,19 @@ function drawArrowIcon(p: Pt, angle: number, size: number): void {
   ctxRef.restore()
 }
 
-function drawRoundabout(e: MapElement): void {
+function drawRoundabout (e: MapElement): void {
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const p = cp(coord)
   const lat = coord.lat
-  const r = Math.max(10, metersToPixels(e.radius || 12, lat))
-  const lanes = Math.max(1, Math.round(e.lanes || 2))
+  const r = Math.max(10, metersToPixels(e.radius ?? 12, lat))
+  const lanes = Math.max(1, Math.round(e.lanes ?? 2))
   const ringWidth = r * (0.3 + lanes * 0.1)
 
   ctxRef.save()
   ctxRef.beginPath()
   ctxRef.arc(p.x, p.y, r, 0, Math.PI * 2)
-  ctxRef.strokeStyle = "#c9c9c9"
+  ctxRef.strokeStyle = '#c9c9c9'
   ctxRef.lineWidth = 4
   ctxRef.stroke()
 
@@ -435,7 +438,7 @@ function drawRoundabout(e: MapElement): void {
   ctxRef.arc(p.x, p.y, r - ringWidth, 0, Math.PI * 2, true)
   ctxRef.fillStyle = asphaltPattern
   ctxRef.fill()
-  ctxRef.strokeStyle = "#2c2c2c"
+  ctxRef.strokeStyle = '#2c2c2c'
   ctxRef.lineWidth = 2
   ctxRef.stroke()
 
@@ -444,7 +447,7 @@ function drawRoundabout(e: MapElement): void {
     ctxRef.beginPath()
     ctxRef.arc(p.x, p.y, laneRadius, 0, Math.PI * 2)
     ctxRef.setLineDash([metersToPixels(2, lat), metersToPixels(2, lat)])
-    ctxRef.strokeStyle = "#ffffff"
+    ctxRef.strokeStyle = '#ffffff'
     ctxRef.lineWidth = Math.max(1.2, r * 0.025)
     ctxRef.stroke()
     ctxRef.setLineDash([])
@@ -454,7 +457,7 @@ function drawRoundabout(e: MapElement): void {
   ctxRef.arc(p.x, p.y, r - ringWidth - 2, 0, Math.PI * 2)
   ctxRef.fillStyle = grassPattern
   ctxRef.fill()
-  ctxRef.strokeStyle = "#345c28"
+  ctxRef.strokeStyle = '#345c28'
   ctxRef.lineWidth = 2
   ctxRef.stroke()
 
@@ -470,27 +473,27 @@ function drawRoundabout(e: MapElement): void {
   ctxRef.restore()
 }
 
-function drawHatchZone(e: MapElement): void {
+function drawHatchZone (e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 3) return
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const lat = coord.lat
-  const hatchSpacing = Math.max(8, metersToPixels(e.hatchWidth || 1.5, lat))
-  const cornerStyle: CornerStyle = e.cornerStyle || "straight"
+  const hatchSpacing = Math.max(8, metersToPixels(e.hatchWidth ?? 1.5, lat))
+  const cornerStyle: CornerStyle = e.cornerStyle ?? 'straight'
 
   ctxRef.save()
 
-  if (cornerStyle === "smooth") {
+  if (cornerStyle === 'smooth') {
     drawSmoothPolygon(pts)
   } else {
     ctxRef.beginPath()
     const pt = pts[0]
-    if (!pt) return
+    if (pt == null) return
     ctxRef.moveTo(pt.x, pt.y)
     for (let i = 1; i < pts.length; i++) {
       const ptI = pts[i]
-      if (!ptI) continue;  
+      if (ptI == null) continue
       ctxRef.lineTo(ptI.x, ptI.y)
     }
     ctxRef.closePath()
@@ -499,7 +502,7 @@ function drawHatchZone(e: MapElement): void {
   ctxRef.fillStyle = asphaltPattern
   ctxRef.fill()
   ctxRef.lineWidth = 2.5
-  ctxRef.strokeStyle = "#ffffff"
+  ctxRef.strokeStyle = '#ffffff'
   ctxRef.stroke()
 
   ctxRef.clip()
@@ -514,7 +517,7 @@ function drawHatchZone(e: MapElement): void {
     if (p.y > maxY) maxY = p.y
   })
 
-  ctxRef.strokeStyle = "#ffffff"
+  ctxRef.strokeStyle = '#ffffff'
   ctxRef.lineWidth = Math.max(2, hatchSpacing * 0.4)
   const diag = Math.hypot(maxX - minX, maxY - minY) * 1.5
   for (let offset = -diag; offset < diag; offset += hatchSpacing) {
@@ -530,21 +533,21 @@ function drawHatchZone(e: MapElement): void {
 /* Aménagements cyclables                                             */
 /* ------------------------------------------------------------------ */
 
-function drawCyclePath(e: MapElement): void {
+function drawCyclePath (e: MapElement): void {
   let pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   pts = smoothIfNeeded(e, pts, false)
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const lat = coord.lat
-  const widthPx = Math.max(3, metersToPixels(e.width || 2, lat))
-  const bidirectional = e.direction === "bidirectional"
+  const widthPx = Math.max(3, metersToPixels(e.width ?? 2, lat))
+  const bidirectional = e.direction === 'bidirectional'
   ctxRef.save()
-  ctxRef.lineJoin = "round"
-  ctxRef.lineCap = "round"
+  ctxRef.lineJoin = 'round'
+  ctxRef.lineCap = 'round'
 
   pathFromPoints(pts)
-  ctxRef.strokeStyle = e.color || "#3c8a3c"
+  ctxRef.strokeStyle = e.color ?? '#3c8a3c'
   ctxRef.lineWidth = widthPx
   ctxRef.stroke()
 
@@ -558,7 +561,7 @@ function drawCyclePath(e: MapElement): void {
   if (bidirectional) {
     pathFromPoints(pts)
     ctxRef.setLineDash([metersToPixels(1, lat), metersToPixels(1, lat)])
-    ctxRef.strokeStyle = "rgba(255,255,255,0.9)"
+    ctxRef.strokeStyle = 'rgba(255,255,255,0.9)'
     ctxRef.lineWidth = Math.max(1, widthPx * 0.08)
     ctxRef.stroke()
     ctxRef.setLineDash([])
@@ -576,7 +579,7 @@ function drawCyclePath(e: MapElement): void {
   }
 }
 
-function drawBikePictograms(pts: Pt[], widthPx: number, lat: number, reversed: boolean): void {
+function drawBikePictograms (pts: Pt[], widthPx: number, lat: number, reversed: boolean): void {
   const step = metersToPixels(14, lat)
   if (step < 8) return
   walkPath(pts, step, (p, dirAngle) => {
@@ -585,7 +588,7 @@ function drawBikePictograms(pts: Pt[], widthPx: number, lat: number, reversed: b
     ctxRef.translate(p.x, p.y)
     ctxRef.rotate(angle)
     const s = Math.max(6, widthPx * 0.4)
-    ctxRef.strokeStyle = "rgba(255,255,255,0.92)"
+    ctxRef.strokeStyle = 'rgba(255,255,255,0.92)'
     ctxRef.lineWidth = Math.max(1, s * 0.16)
     ctxRef.beginPath(); ctxRef.arc(-s * 0.55, 0, s * 0.32, 0, Math.PI * 2); ctxRef.stroke()
     ctxRef.beginPath(); ctxRef.arc(s * 0.55, 0, s * 0.32, 0, Math.PI * 2); ctxRef.stroke()
@@ -602,22 +605,22 @@ function drawBikePictograms(pts: Pt[], widthPx: number, lat: number, reversed: b
   })
 }
 
-function drawPaintedCycleLane(e: MapElement): void {
+function drawPaintedCycleLane (e: MapElement): void {
   let pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   pts = smoothIfNeeded(e, pts, false)
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const lat = coord.lat
-  const widthPx = Math.max(6, metersToPixels(e.width || 1.5, lat))
-  const bidirectional = e.direction === "bidirectional"
+  const widthPx = Math.max(6, metersToPixels(e.width ?? 1.5, lat))
+  const bidirectional = e.direction === 'bidirectional'
   ctxRef.save()
-  ctxRef.lineJoin = "round"
-  ctxRef.lineCap = "round"
+  ctxRef.lineJoin = 'round'
+  ctxRef.lineCap = 'round'
 
   pathFromPoints(pts)
   ctxRef.globalAlpha = 0.3
-  ctxRef.strokeStyle = e.color || "#3c8a3c"
+  ctxRef.strokeStyle = e.color ?? '#3c8a3c'
   ctxRef.lineWidth = widthPx
   ctxRef.stroke()
   ctxRef.globalAlpha = 1
@@ -626,14 +629,14 @@ function drawPaintedCycleLane(e: MapElement): void {
     const edge = offsetPolyline(pts, off)
     ctxRef.beginPath()
     const edgeFirst = edge[0]
-    if (!edgeFirst) return 
+    if (edgeFirst == null) return
     ctxRef.moveTo(edgeFirst.x, edgeFirst.y)
     for (let k = 1; k < edge.length; k++) {
-      const edgeK = edge[k];
-      if (!edgeK) continue
+      const edgeK = edge[k]
+      if (edgeK == null) continue
       ctxRef.lineTo(edgeK.x, edgeK.y)
     }
-    ctxRef.strokeStyle = "#ffffff"
+    ctxRef.strokeStyle = '#ffffff'
     ctxRef.lineWidth = Math.max(1.2, widthPx * 0.08)
     ctxRef.stroke()
   })
@@ -649,12 +652,12 @@ function drawPaintedCycleLane(e: MapElement): void {
   }
 }
 
-function drawCycleStreet(e: MapElement): void {
+function drawCycleStreet (e: MapElement): void {
   let pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   pts = smoothIfNeeded(e, pts, false)
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const lat = coord.lat
   const step = metersToPixels(18, lat)
   if (step < 10) return
@@ -663,7 +666,7 @@ function drawCycleStreet(e: MapElement): void {
     ctxRef.translate(p.x, p.y)
     ctxRef.rotate(angle)
     const s = Math.max(9, metersToPixels(1.1, lat))
-    ctxRef.strokeStyle = "rgba(255,255,255,0.95)"
+    ctxRef.strokeStyle = 'rgba(255,255,255,0.95)'
     ctxRef.lineWidth = Math.max(1.3, s * 0.13)
     ctxRef.beginPath(); ctxRef.arc(0, 0, s * 1.4, 0, Math.PI * 2); ctxRef.stroke()
     ctxRef.beginPath(); ctxRef.arc(-s * 0.45, s * 0.25, s * 0.24, 0, Math.PI * 2); ctxRef.stroke()
@@ -680,22 +683,22 @@ function drawCycleStreet(e: MapElement): void {
 /* Cheminements piétons / stationnement                               */
 /* ------------------------------------------------------------------ */
 
-function drawPedestrianPath(e: MapElement): void {
+function drawPedestrianPath (e: MapElement): void {
   let pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   pts = smoothIfNeeded(e, pts, false)
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const lat = coord.lat
-  const widthPx = Math.max(4, metersToPixels(e.width || 2.5, lat))
+  const widthPx = Math.max(4, metersToPixels(e.width ?? 2.5, lat))
 
   ctxRef.save()
-  ctxRef.lineJoin = "round"
-  ctxRef.lineCap = "round"
+  ctxRef.lineJoin = 'round'
+  ctxRef.lineCap = 'round'
 
   // Bordure
   pathFromPoints(pts)
-  ctxRef.strokeStyle = "#8f887a"
+  ctxRef.strokeStyle = '#8f887a'
   ctxRef.lineWidth = widthPx + 3
   ctxRef.stroke()
 
@@ -707,26 +710,26 @@ function drawPedestrianPath(e: MapElement): void {
   ctxRef.restore()
 }
 
-function drawParking(e: MapElement): void {
+function drawParking (e: MapElement): void {
   let pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   pts = smoothIfNeeded(e, pts, false)
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const lat = coord.lat
-  const layout: ParkingLayout = e.layout || "bataille"
-  const bayWidth = Math.max(6, metersToPixels(e.bay || 2.5, lat))
-  const depthPx = Math.max(10, metersToPixels(e.depth || 5, lat))
+  const layout: ParkingLayout = e.layout ?? 'bataille'
+  const bayWidth = Math.max(6, metersToPixels(e.bay ?? 2.5, lat))
+  const depthPx = Math.max(10, metersToPixels(e.depth ?? 5, lat))
 
   ctxRef.save()
-  ctxRef.lineCap = "butt"
-  ctxRef.lineJoin = "round"
+  ctxRef.lineCap = 'butt'
+  ctxRef.lineJoin = 'round'
 
   let bandThickness = depthPx
-  if (layout === "creneau") bandThickness = Math.max(8, metersToPixels(2.2, lat))
+  if (layout === 'creneau') bandThickness = Math.max(8, metersToPixels(2.2, lat))
 
   pathFromPoints(pts)
-  ctxRef.strokeStyle = "#333333"
+  ctxRef.strokeStyle = '#333333'
   ctxRef.lineWidth = bandThickness
   ctxRef.stroke()
 
@@ -737,7 +740,7 @@ function drawParking(e: MapElement): void {
   ctxRef.stroke()
   ctxRef.globalAlpha = 1
 
-  ctxRef.strokeStyle = "#ffffff"
+  ctxRef.strokeStyle = '#ffffff'
   ctxRef.lineWidth = Math.max(1.5, bayWidth * 0.05)
 
   let distAcc = 0
@@ -745,7 +748,7 @@ function drawParking(e: MapElement): void {
   for (let i = 0; i < pts.length - 1; i++) {
     const a = pts[i]
     const b = pts[i + 1]
-    if(!a || !b) continue
+    if ((a == null) || (b == null)) continue
     const segLen = Math.hypot(b.x - a.x, b.y - a.y)
     const angle = Math.atan2(b.y - a.y, b.x - a.x)
     const nx = Math.cos(angle + Math.PI / 2)
@@ -756,12 +759,12 @@ function drawParking(e: MapElement): void {
       const x = a.x + (b.x - a.x) * t
       const y = a.y + (b.y - a.y) * t
 
-      if (layout === "bataille") {
+      if (layout === 'bataille') {
         ctxRef.beginPath()
         ctxRef.moveTo(x - (nx * bandThickness) / 2, y - (ny * bandThickness) / 2)
         ctxRef.lineTo(x + (nx * bandThickness) / 2, y + (ny * bandThickness) / 2)
         ctxRef.stroke()
-      } else if (layout === "epi") {
+      } else if (layout === 'epi') {
         const angleEpi = angle + Math.PI / 4
         const ux2 = Math.cos(angleEpi)
         const uy2 = Math.sin(angleEpi)
@@ -770,7 +773,7 @@ function drawParking(e: MapElement): void {
         ctxRef.moveTo(x - ux2 * halfLen, y - uy2 * halfLen)
         ctxRef.lineTo(x + ux2 * halfLen, y + uy2 * halfLen)
         ctxRef.stroke()
-      } else if (layout === "creneau") {
+      } else if (layout === 'creneau') {
         ctxRef.save()
         ctxRef.translate(x, y)
         ctxRef.rotate(angle)
@@ -789,13 +792,13 @@ function drawParking(e: MapElement): void {
 /* Marquage au sol                                                    */
 /* ------------------------------------------------------------------ */
 
-function drawCrossing(e: MapElement): void {
+function drawCrossing (e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   const [P1, P2] = pts
-  if (!P1 || !P2) return
+  if ((P1 == null) || (P2 == null)) return
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const lat = coord.lat
   const dx = P2.x - P1.x
   const dy = P2.y - P1.y
@@ -805,11 +808,11 @@ function drawCrossing(e: MapElement): void {
   const uy = dy / total
   const nx = -uy
   const ny = ux
-  const stripeW = Math.max(2, metersToPixels(e.stripeWidth || 0.5, lat))
-  const spanPx = Math.max(6, metersToPixels(e.span || 3.5, lat))
+  const stripeW = Math.max(2, metersToPixels(e.stripeWidth ?? 0.5, lat))
+  const spanPx = Math.max(6, metersToPixels(e.span ?? 3.5, lat))
 
   ctxRef.save()
-  ctxRef.fillStyle = "#ffffff"
+  ctxRef.fillStyle = '#ffffff'
   let pos = 0
   while (pos < total) {
     const cx = P1.x + ux * (pos + stripeW / 2)
@@ -826,13 +829,13 @@ function drawCrossing(e: MapElement): void {
   ctxRef.restore()
 }
 
-function drawYieldLine(e: MapElement): void {
+function drawYieldLine (e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   const [P1, P2] = pts
-  if (!P1 || !P2) return
+  if ((P1 == null) || (P2 == null)) return
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const lat = coord.lat
   const dx = P2.x - P1.x
   const dy = P2.y - P1.y
@@ -846,8 +849,8 @@ function drawYieldLine(e: MapElement): void {
   const triangleHeight = Math.max(8, metersToPixels(1.2, lat))
 
   ctxRef.save()
-  ctxRef.fillStyle = "#ffffff"
-  ctxRef.strokeStyle = "#2c2c2c"
+  ctxRef.fillStyle = '#ffffff'
+  ctxRef.strokeStyle = '#2c2c2c'
   ctxRef.lineWidth = 1
 
   let pos = triangleBase / 2
@@ -872,30 +875,30 @@ function drawYieldLine(e: MapElement): void {
   ctxRef.restore()
 }
 
-function drawStopLine(e: MapElement): void {
+function drawStopLine (e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const lat = coord.lat
   const thickness = Math.max(3, metersToPixels(0.5, lat))
 
   ctxRef.save()
   pathFromPoints(pts)
-  ctxRef.strokeStyle = "#ffffff"
+  ctxRef.strokeStyle = '#ffffff'
   ctxRef.lineWidth = thickness
-  ctxRef.lineCap = "square"
+  ctxRef.lineCap = 'square'
   ctxRef.stroke()
   ctxRef.restore()
 }
 
-function drawGroundStop(e: MapElement): void {
+function drawGroundStop (e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   const [P1, P2] = pts
-  if (!P1 || !P2) return 
+  if ((P1 == null) || (P2 == null)) return
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const lat = coord.lat
   const angle = Math.atan2(P2.y - P1.y, P2.x - P1.x)
   const cx = (P1.x + P2.x) / 2
@@ -906,28 +909,28 @@ function drawGroundStop(e: MapElement): void {
   ctxRef.translate(cx, cy)
   ctxRef.rotate(angle - Math.PI / 2)
   ctxRef.scale(1, 2.4)
-  ctxRef.fillStyle = "#ffffff"
+  ctxRef.fillStyle = '#ffffff'
   ctxRef.font = `bold ${Math.max(9, unit * 2.6)}px Arial, sans-serif`
-  ctxRef.textAlign = "center"
-  ctxRef.textBaseline = "middle"
-  ctxRef.fillText("STOP", 0, 0)
+  ctxRef.textAlign = 'center'
+  ctxRef.textBaseline = 'middle'
+  ctxRef.fillText('STOP', 0, 0)
   ctxRef.restore()
 }
 
-function drawGroundArrow(e: MapElement): void {
+function drawGroundArrow (e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   const [P1, P2] = pts
-  if (!P1 || !P2) return
+  if ((P1 == null) || (P2 == null)) return
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const lat = coord.lat
   const angle = Math.atan2(P2.y - P1.y, P2.x - P1.x)
   const L_ = Math.max(20, metersToPixels(2.6, lat))
-  const type: ArrowType = e.arrowType || "tout_droit"
+  const type: ArrowType = e.arrowType ?? 'tout_droit'
   const headSize = L_ * 0.22
 
-  function arrowHead(x: number, y: number, dirAngle: number): void {
+  function arrowHead (x: number, y: number, dirAngle: number): void {
     ctxRef.save()
     ctxRef.translate(x, y)
     ctxRef.rotate(dirAngle)
@@ -943,18 +946,18 @@ function drawGroundArrow(e: MapElement): void {
   ctxRef.save()
   ctxRef.translate(P1.x, P1.y)
   ctxRef.rotate(angle)
-  ctxRef.strokeStyle = "#ffffff"
-  ctxRef.fillStyle = "#ffffff"
+  ctxRef.strokeStyle = '#ffffff'
+  ctxRef.fillStyle = '#ffffff'
   ctxRef.lineWidth = Math.max(2, L_ * 0.09)
-  ctxRef.lineJoin = "round"
-  ctxRef.lineCap = "round"
+  ctxRef.lineJoin = 'round'
+  ctxRef.lineCap = 'round'
 
-  if (type === "tout_droit" || type === "tout_droit_gauche" || type === "tout_droit_droite") {
+  if (type === 'tout_droit' || type === 'tout_droit_gauche' || type === 'tout_droit_droite') {
     ctxRef.beginPath(); ctxRef.moveTo(0, 0); ctxRef.lineTo(L_ * 0.75, 0); ctxRef.stroke()
     arrowHead(L_ * 0.75, 0, 0)
   }
-  if (type === "gauche" || type === "tout_droit_gauche") {
-    const bendX = type === "gauche" ? L_ * 0.55 : L_ * 0.4
+  if (type === 'gauche' || type === 'tout_droit_gauche') {
+    const bendX = type === 'gauche' ? L_ * 0.55 : L_ * 0.4
     ctxRef.beginPath()
     ctxRef.moveTo(0, 0)
     ctxRef.lineTo(bendX, 0)
@@ -962,8 +965,8 @@ function drawGroundArrow(e: MapElement): void {
     ctxRef.stroke()
     arrowHead(bendX + L_ * 0.15, -L_ * 0.3, -Math.PI / 2)
   }
-  if (type === "droite" || type === "tout_droit_droite") {
-    const bendX = type === "droite" ? L_ * 0.55 : L_ * 0.4
+  if (type === 'droite' || type === 'tout_droit_droite') {
+    const bendX = type === 'droite' ? L_ * 0.55 : L_ * 0.4
     ctxRef.beginPath()
     ctxRef.moveTo(0, 0)
     ctxRef.lineTo(bendX, 0)
@@ -974,13 +977,13 @@ function drawGroundArrow(e: MapElement): void {
   ctxRef.restore()
 }
 
-function drawSharrow(e: MapElement): void {
+function drawSharrow (e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 2) return
   const [P1, P2] = pts
-  if (!P1 || !P2) return
+  if ((P1 == null) || (P2 == null)) return
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const lat = coord.lat
   const angle = Math.atan2(P2.y - P1.y, P2.x - P1.x)
   const cx = (P1.x + P2.x) / 2
@@ -990,8 +993,8 @@ function drawSharrow(e: MapElement): void {
   ctxRef.save()
   ctxRef.translate(cx, cy)
   ctxRef.rotate(angle)
-  ctxRef.strokeStyle = "#ffffff"
-  ctxRef.fillStyle = "#ffffff"
+  ctxRef.strokeStyle = '#ffffff'
+  ctxRef.fillStyle = '#ffffff'
   ctxRef.lineWidth = Math.max(1.4, s * 0.14)
 
   ctxRef.beginPath(); ctxRef.arc(-s * 0.7, s * 0.35, s * 0.28, 0, Math.PI * 2); ctxRef.stroke()
@@ -1015,26 +1018,26 @@ function drawSharrow(e: MapElement): void {
 /* Végétation                                                         */
 /* ------------------------------------------------------------------ */
 
-function drawSmoothPolygon(pts: Pt[]): void {
+function drawSmoothPolygon (pts: Pt[]): void {
   ctxRef.beginPath()
   const n = pts.length
   const mid = (a: Pt, b: Pt): Pt => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
-  const ptOrigin = pts[n-1]
+  const ptOrigin = pts[n - 1]
   const ptDest = pts[0]
-  if (!ptOrigin || !ptDest) return 
+  if ((ptOrigin == null) || (ptDest == null)) return
   const m0 = mid(ptOrigin, ptDest)
   ctxRef.moveTo(m0.x, m0.y)
   for (let i = 0; i < n; i++) {
     const cur = pts[i]
     const next = pts[(i + 1) % n]
-    if (!cur || !next) continue
+    if ((cur == null) || (next == null)) continue
     const m = mid(cur, next)
     ctxRef.quadraticCurveTo(cur.x, cur.y, m.x, m.y)
   }
   ctxRef.closePath()
 }
 
-function drawGreenSpace(e: MapElement): void {
+function drawGreenSpace (e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 3) return
   ctxRef.save()
@@ -1042,12 +1045,12 @@ function drawGreenSpace(e: MapElement): void {
   ctxRef.fillStyle = grassPattern
   ctxRef.fill()
   ctxRef.lineWidth = 2
-  ctxRef.strokeStyle = "#345c28"
+  ctxRef.strokeStyle = '#345c28'
   ctxRef.stroke()
   ctxRef.restore()
 }
 
-function drawBushMass(e: MapElement): void {
+function drawBushMass (e: MapElement): void {
   const pts: Pt[] = e.coords.map(cp)
   if (pts.length < 3) return
   ctxRef.save()
@@ -1055,27 +1058,27 @@ function drawBushMass(e: MapElement): void {
   ctxRef.fillStyle = bushPattern
   ctxRef.fill()
   ctxRef.lineWidth = 2.5
-  ctxRef.strokeStyle = "#1c3c20"
+  ctxRef.strokeStyle = '#1c3c20'
   ctxRef.stroke()
   ctxRef.restore()
 }
 
-function drawTree(e: MapElement): void {
+function drawTree (e: MapElement): void {
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const p = cp(coord)
   const lat = coord.lat
-  const r = Math.max(5, metersToPixels(e.radius || 2.2, lat))
+  const r = Math.max(5, metersToPixels(e.radius ?? 2.2, lat))
   ctxRef.save()
   ctxRef.beginPath()
   ctxRef.ellipse(p.x + r * 0.25, p.y + r * 0.3, r * 0.95, r * 0.75, 0, 0, Math.PI * 2)
-  ctxRef.fillStyle = "rgba(0,0,0,0.28)"
+  ctxRef.fillStyle = 'rgba(0,0,0,0.28)'
   ctxRef.fill()
 
   const grad = ctxRef.createRadialGradient(p.x - r * 0.3, p.y - r * 0.3, r * 0.1, p.x, p.y, r)
-  grad.addColorStop(0, "#93d65e")
-  grad.addColorStop(0.55, "#4f9c3a")
-  grad.addColorStop(1, "#1f5c22")
+  grad.addColorStop(0, '#93d65e')
+  grad.addColorStop(0.55, '#4f9c3a')
+  grad.addColorStop(1, '#1f5c22')
   ctxRef.beginPath()
   ctxRef.arc(p.x, p.y, r, 0, Math.PI * 2)
   ctxRef.fillStyle = grad
@@ -1083,27 +1086,27 @@ function drawTree(e: MapElement): void {
   ctxRef.restore()
 }
 
-function drawTrafficLight(e: MapElement): void {
+function drawTrafficLight (e: MapElement): void {
   const coord = e.coords[0]
-  if (!coord) return
+  if (coord == null) return
   const p = cp(coord)
   ctxRef.save()
-  ctxRef.strokeStyle = "#333333"
+  ctxRef.strokeStyle = '#333333'
   ctxRef.lineWidth = 3
   ctxRef.beginPath()
   ctxRef.moveTo(p.x, p.y + 10)
   ctxRef.lineTo(p.x, p.y - 12)
   ctxRef.stroke()
 
-  ctxRef.fillStyle = "#1a1a1a"
-  ctxRef.strokeStyle = "#444"
+  ctxRef.fillStyle = '#1a1a1a'
+  ctxRef.strokeStyle = '#444'
   ctxRef.lineWidth = 1
   ctxRef.fillRect(p.x - 5, p.y - 24, 10, 22)
   ctxRef.strokeRect(p.x - 5, p.y - 24, 10, 22)
 
-  ctxRef.fillStyle = "#e14b4b"; ctxRef.beginPath(); ctxRef.arc(p.x, p.y - 19, 2.2, 0, Math.PI * 2); ctxRef.fill()
-  ctxRef.fillStyle = "#ffa500"; ctxRef.beginPath(); ctxRef.arc(p.x, p.y - 13, 2.2, 0, Math.PI * 2); ctxRef.fill()
-  ctxRef.fillStyle = "#3cb371"; ctxRef.beginPath(); ctxRef.arc(p.x, p.y - 7, 2.2, 0, Math.PI * 2); ctxRef.fill()
+  ctxRef.fillStyle = '#e14b4b'; ctxRef.beginPath(); ctxRef.arc(p.x, p.y - 19, 2.2, 0, Math.PI * 2); ctxRef.fill()
+  ctxRef.fillStyle = '#ffa500'; ctxRef.beginPath(); ctxRef.arc(p.x, p.y - 13, 2.2, 0, Math.PI * 2); ctxRef.fill()
+  ctxRef.fillStyle = '#3cb371'; ctxRef.beginPath(); ctxRef.arc(p.x, p.y - 7, 2.2, 0, Math.PI * 2); ctxRef.fill()
   ctxRef.restore()
 }
 
@@ -1111,49 +1114,49 @@ function drawTrafficLight(e: MapElement): void {
 /* Aperçu du tracé en cours                                           */
 /* ------------------------------------------------------------------ */
 
-const SMOOTHABLE_TYPES: readonly string[] = ["route", "piste_cyclable", "chemin_pieton", "stationnement"]
+const SMOOTHABLE_TYPES: readonly string[] = ['route', 'piste_cyclable', 'chemin_pieton', 'stationnement']
 
-function drawPreview(): void {
+function drawPreview (): void {
   if (drawingPointsRef.length === 0) return
   const pts: Pt[] = drawingPointsRef.map(cp)
-  const cfg: ToolConfigEntry | undefined = currentToolRef ? toolConfig[currentToolRef] : undefined
-  const showMouseSegment = !!mousePos && !!cfg && cfg.mode !== "point" && cfg.mode !== "edit"
+  const cfg: ToolConfigEntry | undefined = currentToolRef != null ? toolConfig[currentToolRef] : undefined
+  const showMouseSegment = !(mousePos == null) && !(cfg == null) && cfg.mode !== 'point' && cfg.mode !== 'edit'
   const previewPts = pts.slice()
-  if (showMouseSegment && mousePos) {
+  if (showMouseSegment && (mousePos != null)) {
     previewPts.push(cp(mousePos))
   }
   ctxRef.save()
 
-  const targetType = currentToolRef === "branch" ? "route" : currentToolRef
-  const smoothCheckbox = byId?.("set-smooth-curves")
+  const targetType = currentToolRef === 'branch' ? 'route' : currentToolRef
+  const smoothCheckbox = byId?.('set-smooth-curves')
   if (
     targetType !== null &&
     SMOOTHABLE_TYPES.includes(targetType) &&
-    smoothCheckbox?.checked &&
+    smoothCheckbox?.checked === true &&
     previewPts.length > 2
   ) {
     const smoothPts = catmullRomSpline(previewPts, 12, false)
-    ctxRef.strokeStyle = "rgba(255,213,74,0.55)"
+    ctxRef.strokeStyle = 'rgba(255,213,74,0.55)'
     ctxRef.lineWidth = 2
     ctxRef.setLineDash([])
     pathFromPoints(smoothPts)
     ctxRef.stroke()
   }
 
-  ctxRef.strokeStyle = "#ffd54a"
-  ctxRef.fillStyle = "#ffd54a"
+  ctxRef.strokeStyle = '#ffd54a'
+  ctxRef.fillStyle = '#ffd54a'
   ctxRef.lineWidth = 2
   ctxRef.setLineDash([6, 4])
   ctxRef.beginPath()
   const ptFirst = pts[0]
-  if (!ptFirst) return 
+  if (ptFirst == null) return
   ctxRef.moveTo(ptFirst.x, ptFirst.y)
   for (let i = 1; i < pts.length; i++) {
     const pt = pts[i]
-    if (!pt) continue 
+    if (pt == null) continue
     ctxRef.lineTo(pt.x, pt.y)
   }
-  if (showMouseSegment && mousePos) {
+  if (showMouseSegment && (mousePos != null)) {
     const mp = cp(mousePos)
     ctxRef.lineTo(mp.x, mp.y)
   }

@@ -1,4 +1,4 @@
-import * as L from "leaflet"
+import * as L from 'leaflet'
 
 export interface Pt {
   x: number
@@ -22,68 +22,68 @@ export interface GeometryInit {
 let mapRef: L.Map | null = null
 let ctxRef: CanvasRenderingContext2D | null = null
 
-function getMap(): L.Map {
-  if (!mapRef) throw new Error("Geometry non initialisée : appelez initGeometry() d'abord")
+function getMap (): L.Map {
+  if (mapRef == null) throw new Error("Geometry non initialisée : appelez initGeometry() d'abord")
   return mapRef
 }
 
-function getCtx(): CanvasRenderingContext2D {
-  if (!ctxRef) throw new Error("Geometry non initialisée : appelez initGeometry() d'abord")
+function getCtx (): CanvasRenderingContext2D {
+  if (ctxRef == null) throw new Error("Geometry non initialisée : appelez initGeometry() d'abord")
   return ctxRef
 }
 
-export function initGeometry({ map, ctx }: GeometryInit): void {
+export function initGeometry ({ map, ctx }: GeometryInit): void {
   mapRef = map
   ctxRef = ctx
 }
 
-export function cp(p: LatLngLike): L.Point {
+export function cp (p: LatLngLike): L.Point {
   return getMap().latLngToContainerPoint(L.latLng(p.lat, p.lng))
 }
 
-export function dist(a: Pt, b: Pt): number {
+export function dist (a: Pt, b: Pt): number {
   return Math.hypot(a.x - b.x, a.y - b.y)
 }
 
-export function metersToPixels(m: number, lat: number): number {
+export function metersToPixels (m: number, lat: number): number {
   const zoom = getMap().getZoom()
   const mpp = (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom)
   return m / mpp
 }
 
-export function pathFromPoints(pts: Pt[]): void {
+export function pathFromPoints (pts: Pt[]): void {
   const ctx = getCtx()
 
   if (pts.length === 0) return
 
   const first = pts[0]
-  if (!first) return
+  if (first == null) return
 
   ctx.beginPath()
   ctx.moveTo(first.x, first.y)
 
   for (let i = 1; i < pts.length; i++) {
     const p = pts[i]
-    if (!p) continue
+    if (p == null) continue
 
     ctx.lineTo(p.x, p.y)
   }
 }
 
 /* Spline de Catmull-Rom (équivalente à des Bézier cubiques bout à bout) */
-export function catmullRomSpline(pts: Pt[], segmentsPerPiece: number, closed: boolean): Pt[] {
+export function catmullRomSpline (pts: Pt[], segmentsPerPiece: number, closed: boolean): Pt[] {
   const n = pts.length
   if (n < 3) return pts.slice()
 
   const at = (i: number): Pt => {
     const index = closed
       ? ((i % n) + n) % n
-      : Math.max(0, Math.min(n - 1, i));
-    const point = pts[index];
-    if (!point) {
-      throw new Error(`Point introuvable à l'index ${index}`);
+      : Math.max(0, Math.min(n - 1, i))
+    const point = pts[index]
+    if (point == null) {
+      throw new Error(`Point introuvable à l'index ${index}`)
     }
-    return point;
+    return point
   }
 
   const out: Pt[] = []
@@ -113,23 +113,23 @@ export function catmullRomSpline(pts: Pt[], segmentsPerPiece: number, closed: bo
       out.push({ x, y })
     }
   }
-  const index = closed 
+  const index = closed
     ? 0
-    : n -1
-  
-  if (!pts[index]) {
-    throw new Error(`Point introuvable à l'index ${index}`);
+    : n - 1
+
+  if (pts[index] == null) {
+    throw new Error(`Point introuvable à l'index ${index}`)
   }
   out.push(pts[index])
   return out
 }
 
-export function smoothIfNeeded(e: Smoothable, pts: Pt[], closed?: boolean): Pt[] {
-  if (e.smooth && pts.length > 2) return catmullRomSpline(pts, 12, !!closed)
+export function smoothIfNeeded (e: Smoothable, pts: Pt[], closed?: boolean): Pt[] {
+  if (e.smooth === true && pts.length > 2) return catmullRomSpline(pts, 12, closed === true)
   return pts
 }
 
-export function walkPath(pts: Pt[], step: number, cb: (p: Pt, angle: number) => void): void {
+export function walkPath (pts: Pt[], step: number, cb: (p: Pt, angle: number) => void): void {
   let d = 0
   let next = step / 2
 
@@ -137,7 +137,7 @@ export function walkPath(pts: Pt[], step: number, cb: (p: Pt, angle: number) => 
     const a = pts[i]
     const b = pts[i + 1]
 
-    if (!a || !b) continue
+    if ((a == null) || (b == null)) continue
 
     const segLen = Math.hypot(b.x - a.x, b.y - a.y)
 
@@ -145,7 +145,7 @@ export function walkPath(pts: Pt[], step: number, cb: (p: Pt, angle: number) => 
       const t = (next - d) / segLen
       const x = a.x + (b.x - a.x) * t
       const y = a.y + (b.y - a.y) * t
-
+      // eslint-disable-next-line n/no-callback-literal -- Le callback reçoit un point géométrique, pas une erreur Node.js.
       cb({ x, y }, Math.atan2(b.y - a.y, b.x - a.x))
       next += step
     }
@@ -154,7 +154,7 @@ export function walkPath(pts: Pt[], step: number, cb: (p: Pt, angle: number) => 
   }
 }
 
-export function distToSegment(p: Pt, a: Pt, b: Pt): number {
+export function distToSegment (p: Pt, a: Pt, b: Pt): number {
   const l2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2
   if (l2 === 0) return dist(p, a)
   let t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2
@@ -162,15 +162,15 @@ export function distToSegment(p: Pt, a: Pt, b: Pt): number {
   return dist(p, { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) })
 }
 
-export function minDistToSegments(pts: Pt[], p: Pt, closed?: boolean): number {
+export function minDistToSegments (pts: Pt[], p: Pt, closed?: boolean): number {
   let m = Infinity
-  const n = pts.length - (closed ? 0 : 1)
+  const n = pts.length - (closed === true ? 0 : 1)
 
   for (let i = 0; i < n; i++) {
     const a = pts[i]
     const b = pts[(i + 1) % pts.length]
 
-    if (!a || !b) continue
+    if ((a == null) || (b == null)) continue
 
     m = Math.min(m, distToSegment(p, a, b))
   }
@@ -178,20 +178,20 @@ export function minDistToSegments(pts: Pt[], p: Pt, closed?: boolean): number {
   return m
 }
 
-export function offsetPolyline(pts: Pt[], offset: number): Pt[] {
+export function offsetPolyline (pts: Pt[], offset: number): Pt[] {
   const n = pts.length
   const out: Pt[] = []
 
   for (let i = 0; i < n; i++) {
     const current = pts[i]
-    if (!current) continue
+    if (current == null) continue
 
     let dx = 0
     let dy = 0
 
     if (i > 0) {
       const prev = pts[i - 1]
-      if (prev) {
+      if (prev != null) {
         dx += current.x - prev.x
         dy += current.y - prev.y
       }
@@ -199,13 +199,14 @@ export function offsetPolyline(pts: Pt[], offset: number): Pt[] {
 
     if (i < n - 1) {
       const next = pts[i + 1]
-      if (next) {
+      if (next != null) {
         dx += next.x - current.x
         dy += next.y - current.y
       }
     }
 
-    const len = Math.hypot(dx, dy) || 1
+    const length = Math.hypot(dx, dy)
+    const len = length === 0 ? 1 : length
     const nx = -dy / len
     const ny = dx / len
 
@@ -218,14 +219,14 @@ export function offsetPolyline(pts: Pt[], offset: number): Pt[] {
   return out
 }
 
-export function pointInPolygon(p: Pt, pts: Pt[]): boolean {
+export function pointInPolygon (p: Pt, pts: Pt[]): boolean {
   let inside = false
 
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
     const current = pts[i]
     const previous = pts[j]
 
-    if (!current || !previous) continue
+    if ((current == null) || (previous == null)) continue
 
     const xi = current.x
     const yi = current.y
@@ -242,14 +243,14 @@ export function pointInPolygon(p: Pt, pts: Pt[]): boolean {
   return inside
 }
 
-export function offsetLatLng(base: LatLngLike, dxMeters: number, dyMeters: number): LatLngLike {
+export function offsetLatLng (base: LatLngLike, dxMeters: number, dyMeters: number): LatLngLike {
   const R = 6378137
   const dLat = (dyMeters / R) * (180 / Math.PI)
   const dLng = (dxMeters / (R * Math.cos((base.lat * Math.PI) / 180))) * (180 / Math.PI)
   return { lat: base.lat + dLat, lng: base.lng + dLng }
 }
 
-export function circleLatLng(
+export function circleLatLng (
   center: LatLngLike,
   radiusMeters: number,
   segments: number
@@ -262,7 +263,7 @@ export function circleLatLng(
   return coords
 }
 
-export function makeSquareIsland(
+export function makeSquareIsland (
   center: LatLngLike,
   dirDeg: number,
   distance: number,
@@ -279,11 +280,11 @@ export function makeSquareIsland(
     offsetLatLng(islandCenter, -ux * half - px * half, -uy * half - py * half),
     offsetLatLng(islandCenter, ux * half - px * half, uy * half - py * half),
     offsetLatLng(islandCenter, ux * half + px * half, uy * half + py * half),
-    offsetLatLng(islandCenter, -ux * half + px * half, -uy * half + py * half),
+    offsetLatLng(islandCenter, -ux * half + px * half, -uy * half + py * half)
   ]
 }
 
-export function makeCrossing(
+export function makeCrossing (
   center: LatLngLike,
   dirDeg: number,
   distance: number,
@@ -297,6 +298,6 @@ export function makeCrossing(
   const c = offsetLatLng(center, ux * distance, uy * distance)
   return [
     offsetLatLng(c, (px * span) / 2, (py * span) / 2),
-    offsetLatLng(c, (-px * span) / 2, (-py * span) / 2),
+    offsetLatLng(c, (-px * span) / 2, (-py * span) / 2)
   ]
 }
