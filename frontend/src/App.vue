@@ -10,16 +10,21 @@
       ℹ️ Légende
     </button>
     <div class="legend-card" v-show="showLegend">
-      <div class="legend-item"><span class="swatch" style="background:#2c2c2c;"></span>Route / Voies</div>
+      <div class="legend-item"><span class="swatch" style="background:#2c2c2c;"></span>Route / Voies / Chaussée</div>
       <div class="legend-item"><span class="swatch" style="background:#2c2c2c; border:1px dashed #fff;"></span>Rond-point</div>
       <div class="legend-item"><span class="swatch" style="background:repeating-linear-gradient(45deg,#2c2c2c,#2c2c2c 4px,#fff 4px,#fff 8px);"></span>Zébras / Hachures</div>
       <div class="legend-item"><span class="swatch" style="background:#3c8a3c;"></span>Piste cyclable</div>
       <div class="legend-item"><span class="swatch" style="background:#2c2c2c; border:2px solid #3c8a3c;"></span>Bande / rue cyclable / chevrons</div>
-      <div class="legend-item"><span class="swatch" style="background:#b9b2a3;"></span>Chemin piéton</div>
+      <div class="legend-item"><span class="swatch" style="background:#b9b2a3;"></span>Chemin piéton / Zone piétonne</div>
       <div class="legend-item"><span class="swatch" style="background:#ffffff;"></span>Passage piéton / Cédez-le-passage</div>
       <div class="legend-item"><span class="swatch" style="background:#e14b4b;"></span>Feu tricolore</div>
       <div class="legend-item"><span class="swatch" style="background:#ffcc00;"></span>Feu clignotant</div>
       <div class="legend-item"><span class="swatch" style="background:#4a7c3a;"></span>Espace vert / Arbre</div>
+      <div class="legend-item"><span class="swatch" style="background:#4a90c8;"></span>Eau / Fontaine</div>
+      <div class="legend-item"><span class="swatch" style="background:#8c8c8c;"></span>Bâtiment</div>
+      <div class="legend-item"><span class="swatch" style="background:#c0392b;"></span>Voie de bus / Arrêt de bus</div>
+      <div class="legend-item"><span class="swatch" style="background:#6b6b6b; border:1px solid #bbb;"></span>Rails de tramway</div>
+      <div class="legend-item"><span class="swatch" style="background:#4a6fa5;"></span>Véhicules</div>
     </div>
 
     <!-- ================= PROPRIÉTÉS (haut droite) ================= -->
@@ -99,7 +104,7 @@
 
         <span class="sep"></span>
         
-        <button class="action-btn clear-all" id="btn-clear-all" @click="clearAll" title="Effacer tout le projet">🗑️ Tout Supprimer</button>
+        <button class="action-btn clear-all" id="btn-clear-all" @click="clearAll" title="Effacer tout le projet">💥 Tout Supprimer</button>
       </div>
     </div>
   </div>
@@ -114,15 +119,15 @@ import {
   dist,
   minDistToSegments,
   pointInPolygon,
-} from "./geometry.js";
-import type { LatLngLike } from "./geometry.js";
+} from "./geometry.ts";
+import type { LatLngLike } from "./geometry.ts";
 
 import {
   initRender,
   resizeOverlay,
   draw
-} from "./render.js";
-import type { MapElement, ElementType, Direction } from "./render.js";
+} from "./render.ts";
+import type { MapElement, ElementType, Direction } from "./render.ts";
 
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -196,39 +201,62 @@ const selectedType = ref('')
    CATÉGORIES DU DOCK (mêmes icônes qu'avant)
    ============================================================ */
 const categories: Category[] = [
-  { id: 'voirie', icon: '🛣️', label: 'Voirie', tools: [
+  { id: 'voirie', icon: '🛣️', label: 'Voiries', tools: [
     { id: 'route',         icon: '🛣️', label: 'Route' },
     { id: 'rond_point',    icon: '⭕', label: 'Rond-point' },
-    { id: 'hachures',      icon: '📐', label: 'Zébras / Hachures' },
-    { id: 'stationnement', icon: '🅿️', label: 'Stationnement' },
-  ]},
-  { id: 'mobilite', icon: '🚴', label: 'Mobilités', tools: [
     { id: 'piste_cyclable', icon: '🚴', label: 'Piste cycl.' },
-    { id: 'bande_cyclable', icon: '🚲', label: 'Bande cyclable' },
-    { id: 'chevron_velo',   icon: '˄˄', label: 'Chevrons vélo' },
-    { id: 'rue_cyclable',   icon: 'Ⓑ', label: 'Rue cyclable' },
     { id: 'chemin_pieton',  icon: '🧱', label: 'Chemin piéton' },
+    { id: 'rails_tramway', icon: '🚊', label: 'Rails Tramway'}
   ]},
-  { id: 'marquages', icon: '🚸', label: 'Marquages', tools: [
-    { id: 'passage_pieton',   icon: '🚸', label: 'Pass. piéton' },
+  { id: 'zones', icon: '⬚', label: 'Zone', tools: [
+    { id: 'hachures',      icon: '▨', label: 'Zébras / Hachures' },
+    { id: 'espace_vert', icon: '🌿', label: 'Espace vert' },
+    { id: 'eau', icon: '💧', label: 'Eau' },
+    { id: 'zone_pietonne', icon: '🚸', label: 'Zone Pietonne'},
+    { id: 'chaussee', icon: '🛣️', label: 'Chaussée'},
+  ]},
+  { id: 'marquages', icon: '🖌️', label: 'Marquages', tools: [
+    { id: 'passage_pieton',   icon: '🚶', label: 'Pass. piéton' },
     { id: 'cedez_le_passage', icon: '🔻', label: 'Cédez-le-passage' },
     { id: 'ligne_stop',       icon: '🛑', label: 'Ligne de stop' },
     { id: 'stop_sol',         icon: '🅢', label: 'STOP au sol' },
     { id: 'fleche_sol',       icon: '⬆️', label: 'Flèche directionnelle' },
+    { id: 'bande_cyclable', icon: '🚲', label: 'Bande cyclable' },
+    { id: 'chevron_velo',   icon: '˄˄', label: 'Chevrons vélo' },
+    { id: 'rue_cyclable',   icon: 'Ⓑ', label: 'Rue cyclable' },
+    { id: 'stationnement', icon: '🅿️', label: 'Stationnement' },
+    { id: 'arret_bus', icon: '🚏', label: 'Arrêt Bus'},
+    { id: 'voie_bus', icon: '🚌', label: 'Voie Bus'}
   ]},
-  { id: 'signal', icon: '🚦', label: 'Signalisation', tools: [
+  { id: 'signal', icon: '🚦', label: 'Signalisations', tools: [
     { id: 'feu_tricolore',  icon: '🚦', label: 'Feu tricolore' },
     { id: 'feu_clignotant', icon: '🟡', label: 'Feu clignotant' },
   ]},
-  { id: 'vegetal', icon: '🌿', label: 'Végétation', tools: [
-    { id: 'espace_vert', icon: '🌿', label: 'Espace vert' },
-    { id: 'massif',      icon: '🌳', label: 'Massif' },
-    { id: 'arbre',       icon: '🌲', label: 'Arbre isolé' },
+  { id: 'batiments', icon: '🏢', label: 'Bâtiments', tools: [
+    { id: 'batiment', icon: '🏬', label: 'Bâtiment'},
+    { id: 'entree_metro', icon: 'Ⓜ️', label: 'Entrée Metro'},
   ]},
-  { id: 'outils', icon: '✏️', label: 'Outils', tools: [
-    { id: 'edit',   icon: '✏️', label: 'Éditer le tracé',        cls: 'edit-btn' },
+  { id: 'vehicules', icon: '🚗', label: 'Véhicules', tools: [
+    { id: 'vehicule', icon: '🚙', label: 'Voiture'},
+    { id: 'camion', icon: '🚛', label: 'Camion'},
+    { id: 'bus', icon: '🚌', label: 'Bus'},
+    { id: 'tramway', icon: '🚊', label: 'Tramway'},
+    { id: 'deux_roues', icon: '🛵', label: 'Deux Roues'},
+    { id: 'velo', icon: '🚴', label: 'Vélo'}
+  ]},
+  { id: 'parc', icon: '🏞️', label: 'Parc', tools: [
+    { id: 'arbre', icon: '🌲', label: 'Arbre isolé' },
+  ]},
+  { id: 'mobilier_urbain', icon: '🏙️', label: 'Mobilier Urbain', tools: [
+    { id: 'banc_public', icon: '🪑', label: 'Banc Public' },
+    { id: 'eclairage_public', icon: '💡', label: 'Éclairage public'}, 
+    { id: 'parking_velo', icon: '🚲', label: 'Parking Vélo' },
+    { id: 'fontaine', icon: '⛲', label: 'Fontaine'},
+  ]},
+  { id: 'outils', icon: '🏗️', label: 'Outils', tools: [
+    { id: 'edit',   icon: '🔨', label: 'Éditer le tracé',        cls: 'edit-btn' },
     { id: 'branch', icon: '🔀', label: 'Ajouter une branche',    cls: 'branch-btn' },
-    { id: 'delete', icon: '🗑️', label: 'Supprimer un élément',   cls: 'delete-btn' },
+    { id: 'delete', icon: '💣', label: 'Supprimer un élément',   cls: 'delete-btn' },
   ]},
 ]
 
@@ -248,8 +276,9 @@ const activeToolInfo = computed<{ icon: string; label: string }>(
    donc continuer à lire byId('set-...')).
    ============================================================ */
 const ROUTE_TOOLS = ['route', 'branch']
-const SMOOTH_TOOLS = ['route', 'branch', 'piste_cyclable', 'chemin_pieton', 'bande_cyclable', 'rue_cyclable', 'stationnement']
+const SMOOTH_TOOLS = ['route', 'branch', 'piste_cyclable', 'chemin_pieton', 'bande_cyclable', 'rue_cyclable', 'stationnement', 'rails_tramway', 'voie_bus']
 const CYCLE_TOOLS = ['piste_cyclable', 'bande_cyclable']
+const VEHICLE_TOOLS = ['vehicule', 'camion', 'bus', 'tramway', 'deux_roues', 'velo']
 
 const settingsValues = reactive<Record<string, SettingValue>>({
   'set-smooth-curves': false,
@@ -271,7 +300,13 @@ const settingsValues = reactive<Record<string, SettingValue>>({
   'set-cross-span': 3.5,
   'set-cross-stripe': 0.5,
   'set-arrow-type': 'tout_droit',
-  'set-tree-radius': 2.2
+  'set-tree-radius': 2.2,
+  // --- nouveaux outils ---
+  'set-tram-width': 3,
+  'set-bus-lane-width': 3.5,
+  'set-building-height': 12,
+  'set-fountain-radius': 1.5,
+  'set-vehicle-color': '#4a6fa5'
 })
 
 const fields: Field[] = [
@@ -323,6 +358,13 @@ const fields: Field[] = [
 
   // Arbre
   { id: 'set-tree-radius', label: 'Rayon houppier arbre (m)', type: 'number', def: 2.2, min: 1, max: 8, step: 0.2, tools: ['arbre'] },
+
+  // --- Nouveaux outils ---
+  { id: 'set-tram-width',      label: 'Écartement rails tramway (m)', type: 'number', def: 3,   min: 1.4, max: 6,   step: 0.1, tools: ['rails_tramway'] },
+  { id: 'set-bus-lane-width',  label: 'Largeur voie de bus (m)',      type: 'number', def: 3.5, min: 2.5, max: 6,   step: 0.5, tools: ['voie_bus'] },
+  { id: 'set-building-height', label: 'Hauteur bâtiment (m)',         type: 'number', def: 12,  min: 3,   max: 100, step: 1,   tools: ['batiment'] },
+  { id: 'set-fountain-radius', label: 'Rayon fontaine (m)',           type: 'number', def: 1.5, min: 0.5, max: 8,   step: 0.5, tools: ['fontaine'] },
+  { id: 'set-vehicle-color',   label: 'Couleur du véhicule',          type: 'color',  def: '#4a6fa5', tools: VEHICLE_TOOLS },
 ]
 
 const hasFieldsForTool = computed(() => fields.some(f => f.tools.includes(uiTool.value)))
@@ -340,14 +382,24 @@ let draggedVertexIndex: number | null = null
 let branchSourceNode: LatLngLike | null = null
 
 const toolConfig: Record<string, ToolConfig> = {
+  // Voirie
   route:           {label:'Route',            mode:'line',    minPoints:2},
   piste_cyclable:  {label:'Piste cycl.',      mode:'line',    minPoints:2},
   chemin_pieton:   {label:'Chemin piéton',    mode:'line',    minPoints:2},
   rond_point:      {label:'Rond-point',       mode:'point',   minPoints:1},
+  rails_tramway:   {label:'Rails Tramway',    mode:'line',    minPoints:2},
+  voie_bus:        {label:'Voie Bus',         mode:'line',    minPoints:2},
+
+  // Zones
   hachures:        {label:'Zébras / Hachures',mode:'polygon', minPoints:3},
-  stationnement:   {label:'Stationnement',    mode:'line',    minPoints:2},
   espace_vert:     {label:'Espace vert',      mode:'polygon', minPoints:3},
   massif:          {label:'Massif',           mode:'polygon', minPoints:3},
+  eau:             {label:'Eau',              mode:'polygon', minPoints:3},
+  zone_pietonne:   {label:'Zone piétonne',    mode:'polygon', minPoints:3},
+  chaussee:        {label:'Chaussée',         mode:'polygon', minPoints:3},
+
+  // Marquages
+  stationnement:   {label:'Stationnement',    mode:'line',    minPoints:2},
   passage_pieton:  {label:'Pass. piéton',     mode:'twopoint',minPoints:2},
   cedez_le_passage:{label:'Cédez-le-passage', mode:'twopoint',minPoints:2},
   ligne_stop:      {label:'Ligne de stop',    mode:'twopoint',minPoints:2},
@@ -356,9 +408,34 @@ const toolConfig: Record<string, ToolConfig> = {
   bande_cyclable:  {label:'Bande cyclable',   mode:'line',    minPoints:2},
   chevron_velo:    {label:'Chevron vélo',     mode:'twopoint',minPoints:2},
   rue_cyclable:    {label:'Rue cyclable',     mode:'line',    minPoints:2},
+  arret_bus:       {label:'Arrêt Bus',        mode:'twopoint',minPoints:2},
+
+  // Signalisation
   feu_tricolore:   {label:'Feu tricolore',    mode:'point',   minPoints:1},
   feu_clignotant:  {label:'Feu clignotant',   mode:'point',   minPoints:1},
+
+  // Bâtiments
+  batiment:        {label:'Bâtiment',         mode:'polygon', minPoints:3},
+  entree_metro:    {label:'Entrée Métro',     mode:'point',   minPoints:1},
+
+  // Véhicules (point d'arrière + point indiquant le sens)
+  vehicule:        {label:'Voiture',          mode:'twopoint',minPoints:2},
+  camion:          {label:'Camion',           mode:'twopoint',minPoints:2},
+  bus:             {label:'Bus',              mode:'twopoint',minPoints:2},
+  tramway:         {label:'Tramway',          mode:'twopoint',minPoints:2},
+  deux_roues:      {label:'Deux roues',       mode:'twopoint',minPoints:2},
+  velo:            {label:'Vélo',             mode:'twopoint',minPoints:2},
+
+  // Parc
   arbre:           {label:'Arbre isolé',      mode:'point',   minPoints:1},
+
+  // Mobilier urbain
+  banc_public:     {label:'Banc public',      mode:'twopoint',minPoints:2},
+  eclairage_public:{label:'Éclairage public', mode:'point',   minPoints:1},
+  parking_velo:    {label:'Parking vélo',     mode:'twopoint',minPoints:2},
+  fontaine:        {label:'Fontaine',         mode:'point',   minPoints:1},
+
+  // Outils
   edit:            {label:'Éditer',           mode:'edit',    minPoints:0},
   branch:          {label:'Branche',          mode:'branch',  minPoints:1}
 }
@@ -368,21 +445,39 @@ const instructions: Record<string, string> = {
   piste_cyclable: 'Cliquez pour tracer la piste cyclable. Validez avec Entrée.',
   chemin_pieton:  'Cliquez pour tracer le chemin piéton (dallage). Validez avec Entrée.',
   rond_point:     'Cliquez sur la carte pour placer le centre du rond-point.',
+  rails_tramway:  'Cliquez pour tracer les rails de tramway. Validez avec Entrée.',
+  voie_bus:       'Cliquez pour tracer la voie de bus. Validez avec Entrée.',
   hachures:       'Cliquez pour tracer les contours de la zone de zébras (3 points min). Validez avec Entrée.',
   stationnement:  'Cliquez le long de la voie où placer les places de stationnement. Validez avec Entrée.',
   espace_vert:    'Cliquez pour dessiner le contour de la zone végétalisée (3 points min). Validez avec Entrée.',
   massif:         'Cliquez pour dessiner le contour du massif arbustif. Validez avec Entrée.',
+  eau:            'Cliquez pour dessiner le contour du plan d\'eau (3 points min). Validez avec Entrée.',
+  zone_pietonne:  'Cliquez pour dessiner la zone piétonne (3 points min). Validez avec Entrée.',
+  chaussee:       'Cliquez pour dessiner la surface de chaussée (3 points min). Validez avec Entrée.',
   passage_pieton: 'Cliquez le point de départ puis le point d\'arrivée du passage piéton (2 clics).',
   cedez_le_passage:'Cliquez les deux extrémités de la ligne de cédez-le-passage (2 clics).',
   ligne_stop:     'Cliquez les deux extrémités de la ligne de stop continue (2 clics).',
-  stop_sol:       'Cliquez le point de départ puis un point indiquant le sens de circulation (3 clics).',
+  stop_sol:       'Cliquez le point de départ puis un point indiquant le sens de circulation (2 clics).',
   fleche_sol:     'Cliquez le point de départ (arrière de la flèche) puis un point indiquant le sens de circulation (2 clics).',
   bande_cyclable: 'Cliquez pour tracer la bande cyclable peinte sur chaussée. Validez avec Entrée.',
   chevron_velo:   'Cliquez le point de départ puis un point indiquant le sens de circulation (2 clics).',
   rue_cyclable:   'Cliquez pour tracer l\'axe de la rue cyclable (pictogrammes répétés). Validez avec Entrée.',
+  arret_bus:      'Cliquez les deux extrémités de l\'arrêt de bus (2 clics).',
   feu_tricolore:  'Cliquez sur le bord de la route pour positionner le feu tricolore.',
   feu_clignotant: 'Cliquez sur la carte pour positionner le feu clignotant.',
+  batiment:       'Cliquez pour dessiner l\'emprise du bâtiment (3 points min). Validez avec Entrée.',
+  entree_metro:   'Cliquez sur la carte pour placer l\'entrée de métro.',
+  vehicule:       'Cliquez l\'arrière du véhicule puis un point indiquant son sens (2 clics).',
+  camion:         'Cliquez l\'arrière du camion puis un point indiquant son sens (2 clics).',
+  bus:            'Cliquez l\'arrière du bus puis un point indiquant son sens (2 clics).',
+  tramway:        'Cliquez l\'arrière du tramway puis un point indiquant son sens (2 clics).',
+  deux_roues:     'Cliquez l\'arrière du deux-roues puis un point indiquant son sens (2 clics).',
+  velo:           'Cliquez l\'arrière du vélo puis un point indiquant son sens (2 clics).',
   arbre:          'Cliquez sur la carte pour planter un arbre.',
+  banc_public:    'Cliquez les deux extrémités du banc (2 clics).',
+  eclairage_public:'Cliquez sur la carte pour placer le lampadaire.',
+  parking_velo:   'Cliquez les deux extrémités de l\'arceau / rangée de vélos (2 clics).',
+  fontaine:       'Cliquez sur la carte pour placer la fontaine.',
   edit:           'Cliquez sur un élément pour afficher ses points de contrôle et ajuster sa géométrie et sa valeur Z.',
   branch:         'Survolez et cliquez sur un nœud d\'un chemin existant pour y démarrer une nouvelle branche.',
   delete:         'Cliquez sur un élément existant pour le supprimer.'
@@ -390,13 +485,19 @@ const instructions: Record<string, string> = {
 
 const zOrderBase: Record<ElementType, number> = {
   route: 0,
+  chaussee: 0.5,
+  eau: 0.8,
   espace_vert: 1,
+  zone_pietonne: 1.5,
   massif: 2,
+  batiment: 2.5,
   hachures: 3,
 
   piste_cyclable: 4,
   bande_cyclable: 4.5,
   rue_cyclable: 4.6,
+  voie_bus: 4.7,
+  rails_tramway: 4.8,
   chemin_pieton: 5,
 
   rond_point: 6,
@@ -404,15 +505,34 @@ const zOrderBase: Record<ElementType, number> = {
 
   passage_pieton: 8,
   cedez_le_passage: 9,
+  arret_bus: 9.5,
   ligne_stop: 10,
   stop_sol: 10.2,
   fleche_sol: 10.4,
   chevron_velo: 10.6,
 
   arbre: 11,
+  entree_metro: 11.2,
+  banc_public: 11.3,
+  parking_velo: 11.4,
+  fontaine: 11.5,
   feu_tricolore: 12,
-  feu_clignotant: 12.5
+  eclairage_public: 12.2,
+  feu_clignotant: 12.5,
+
+  vehicule: 13,
+  camion: 13.1,
+  bus: 13.2,
+  tramway: 13.3,
+  deux_roues: 13.4,
+  velo: 13.5
 }
+
+/* Types dont la géométrie est un point unique / un polygone (utilisés pour la sélection) */
+const POINT_TYPES = ['arbre', 'feu_tricolore', 'feu_clignotant', 'rond_point', 'entree_metro', 'eclairage_public', 'fontaine']
+const POLYGON_TYPES = ['espace_vert', 'massif', 'hachures', 'eau', 'zone_pietonne', 'chaussee', 'batiment']
+/* Tracés sur lesquels on peut démarrer une branche */
+const BRANCHABLE_TYPES = ['route', 'piste_cyclable', 'chemin_pieton', 'voie_bus', 'rails_tramway']
 
 /* ============================================================
    ACCÈS AU DOM (limité au composant)
@@ -510,6 +630,25 @@ function readSettingsForType(type: ElementType): Partial<MapElement> {
       stripeWidth: num('set-cross-stripe')
     }
     case 'arbre': return { radius: num('set-tree-radius') }
+
+    // --- nouveaux outils ---
+    case 'rails_tramway': return {
+      width: num('set-tram-width'),
+      smooth: bool('set-smooth-curves')
+    }
+    case 'voie_bus': return {
+      width: num('set-bus-lane-width'),
+      smooth: bool('set-smooth-curves')
+    }
+    case 'batiment': return { height: num('set-building-height') }
+    case 'fontaine': return { radius: num('set-fountain-radius') }
+    case 'vehicule':
+    case 'camion':
+    case 'bus':
+    case 'tramway':
+    case 'deux_roues':
+    case 'velo': return { color: str('set-vehicle-color') }
+
     default: return {}
   }
 }
@@ -596,11 +735,11 @@ function findNearestElement(containerPoint: L.Point): DrawnElement | null {
   for (const e of elements) {
     const pts = e.coords.map(cp)
     let d: number
-    if (['arbre', 'feu_tricolore', 'feu_clignotant', 'rond_point'].includes(e.type)) {
+    if (POINT_TYPES.includes(e.type)) {
       const first = pts[0]
       if (!first) continue
       d = dist(first, containerPoint)
-    } else if (['espace_vert', 'massif', 'hachures'].includes(e.type)) {
+    } else if (POLYGON_TYPES.includes(e.type)) {
       d = pointInPolygon(containerPoint, pts)
         ? 0
         : minDistToSegments(pts, containerPoint, true)
@@ -640,7 +779,7 @@ function onMapClick(ev: L.LeafletMouseEvent): void {
     if(!branchSourceNode){
       let foundNode: LatLngLike | null = null
       for(const e of elements){
-        if(['route', 'piste_cyclable', 'chemin_pieton'].includes(e.type)){
+        if(BRANCHABLE_TYPES.includes(e.type)){
           for(const coord of e.coords){
             if(dist(cp(coord), cpPoint) < 12) foundNode = coord
           }

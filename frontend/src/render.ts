@@ -8,10 +8,11 @@ import {
   smoothIfNeeded,
   walkPath,
   offsetPolyline
-} from './geometry.js'
-import type { Pt, LatLngLike } from './geometry.js'
+} from './geometry.ts'
+import type { Pt, LatLngLike } from './geometry.ts'
 
 import { buildPatterns } from './texture.ts'
+import type { Patterns } from './texture.ts'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                              */
@@ -37,6 +38,27 @@ export type ElementType =
   | 'arbre'
   | 'feu_clignotant'
   | 'feu_tricolore'
+  // --- nouveaux types ---
+  | 'rails_tramway'
+  | 'voie_bus'
+  | 'eau'
+  | 'zone_pietonne'
+  | 'chaussee'
+  | 'arret_bus'
+  | 'batiment'
+  | 'entree_metro'
+  | 'vehicule'
+  | 'camion'
+  | 'bus'
+  | 'tramway'
+  | 'deux_roues'
+  | 'velo'
+  | 'banc_public'
+  | 'eclairage_public'
+  | 'parking_velo'
+  | 'fontaine'
+
+type VehicleType = 'vehicule' | 'camion' | 'bus' | 'tramway' | 'deux_roues' | 'velo'
 
 export type Direction = 'unidirectional' | 'bidirectional'
 export type ParkingLayout = 'bataille' | 'epi' | 'creneau'
@@ -67,6 +89,7 @@ export interface MapElement {
   stripeWidth?: number
   span?: number
   arrowType?: ArrowType
+  height?: number
 }
 
 export interface ToolConfigEntry {
@@ -90,13 +113,7 @@ export interface RenderInit {
   getState: () => RenderState
 }
 
-/** Forme attendue du retour de buildPatterns() (texture.ts). */
-export interface Patterns {
-  asphaltPattern: CanvasPattern
-  grassPattern: CanvasPattern
-  bushPattern: CanvasPattern
-  pavementPattern: CanvasPattern
-}
+export type { Patterns }
 
 /* ------------------------------------------------------------------ */
 /* État du module                                                     */
@@ -119,33 +136,71 @@ let asphaltPattern!: CanvasPattern
 let grassPattern!: CanvasPattern
 let bushPattern!: CanvasPattern
 let pavementPattern!: CanvasPattern
+let waterPattern!: CanvasPattern
+let ballastPattern!: CanvasPattern
+let busLanePattern!: CanvasPattern
+let roofPattern!: CanvasPattern
 
 /*
-  ATTENTION : `zOrderBase` n'était défini nulle part dans le code fourni
-  (ReferenceError dès qu'un élément n'a pas de `z`). Valeurs ci-dessous
-  à ajuster selon votre ordre d'empilement réel, ou à importer si elles
-  existent déjà ailleurs.
+  Ordre d'empilement par défaut (utilisé seulement si `z` est absent).
+  Synchronisé avec le zOrderBase du composant Vue.
 */
 const zOrderBase: Record<ElementType, number> = {
-  espace_vert: 0,
-  massif: 1,
-  chemin_pieton: 2,
-  piste_cyclable: 3,
-  route: 4,
-  rond_point: 5,
-  stationnement: 6,
-  hachures: 7,
-  bande_cyclable: 8,
-  rue_cyclable: 9,
-  passage_pieton: 10,
-  cedez_le_passage: 11,
-  ligne_stop: 12,
-  stop_sol: 13,
-  fleche_sol: 14,
-  chevron_velo: 15,
-  arbre: 16,
-  feu_clignotant: 17,
-  feu_tricolore: 18
+  route: 0,
+  chaussee: 0.5,
+  eau: 0.8,
+  espace_vert: 1,
+  zone_pietonne: 1.5,
+  massif: 2,
+  batiment: 2.5,
+  hachures: 3,
+
+  piste_cyclable: 4,
+  bande_cyclable: 4.5,
+  rue_cyclable: 4.6,
+  voie_bus: 4.7,
+  rails_tramway: 4.8,
+  chemin_pieton: 5,
+
+  rond_point: 6,
+  stationnement: 7,
+
+  passage_pieton: 8,
+  cedez_le_passage: 9,
+  arret_bus: 9.5,
+  ligne_stop: 10,
+  stop_sol: 10.2,
+  fleche_sol: 10.4,
+  chevron_velo: 10.6,
+
+  arbre: 11,
+  entree_metro: 11.2,
+  banc_public: 11.3,
+  parking_velo: 11.4,
+  fontaine: 11.5,
+  feu_tricolore: 12,
+  eclairage_public: 12.2,
+  feu_clignotant: 12.5,
+
+  vehicule: 13,
+  camion: 13.1,
+  bus: 13.2,
+  tramway: 13.3,
+  deux_roues: 13.4,
+  velo: 13.5
+}
+
+/** Tracés sur lesquels on peut démarrer une branche (doit rester synchronisé avec le composant). */
+const BRANCHABLE_TYPES: readonly string[] = ['route', 'piste_cyclable', 'chemin_pieton', 'voie_bus', 'rails_tramway']
+
+/** Dimensions réelles (en mètres) des véhicules + tailles minimales à l'écran (px). */
+const VEHICLE_SPECS: Record<VehicleType, { len: number, wid: number, minLen: number, minWid: number, color: string }> = {
+  vehicule: { len: 4.5, wid: 1.8, minLen: 14, minWid: 7, color: '#4a6fa5' },
+  camion: { len: 10, wid: 2.5, minLen: 28, minWid: 9, color: '#4a6fa5' },
+  bus: { len: 12, wid: 2.55, minLen: 32, minWid: 9, color: '#4a6fa5' },
+  tramway: { len: 30, wid: 2.4, minLen: 70, minWid: 9, color: '#4a6fa5' },
+  deux_roues: { len: 2, wid: 0.8, minLen: 10, minWid: 4, color: '#4a6fa5' },
+  velo: { len: 1.8, wid: 0.6, minLen: 9, minWid: 3.5, color: '#4a6fa5' }
 }
 
 /* ------------------------------------------------------------------ */
@@ -161,7 +216,10 @@ function initRender ({ overlay, map, ctx, getState }: RenderInit): void {
   ctxRef = ctx
   getStateRef = getState
   const patterns: Patterns = buildPatterns(ctx)
-  ;({ asphaltPattern, grassPattern, bushPattern, pavementPattern } = patterns)
+  ;({
+    asphaltPattern, grassPattern, bushPattern, pavementPattern,
+    waterPattern, ballastPattern, busLanePattern, roofPattern
+  } = patterns)
 }
 
 function syncRenderState (): void {
@@ -219,11 +277,65 @@ function draw (): void {
       case 'arbre': drawTree(e); break
       case 'feu_clignotant': drawBlinkingLight(e); break
       case 'feu_tricolore': drawTrafficLight(e); break
+      // --- nouveaux types ---
+      case 'rails_tramway': drawTramRails(e); break
+      case 'voie_bus': drawBusLane(e); break
+      case 'eau': drawWater(e); break
+      case 'zone_pietonne': drawPedestrianZone(e); break
+      case 'chaussee': drawRoadSurface(e); break
+      case 'arret_bus': drawBusStop(e); break
+      case 'batiment': drawBuilding(e); break
+      case 'entree_metro': drawMetroEntrance(e); break
+      case 'vehicule':
+      case 'camion':
+      case 'bus':
+      case 'tramway':
+      case 'deux_roues':
+      case 'velo': drawVehicle(e); break
+      case 'banc_public': drawBench(e); break
+      case 'eclairage_public': drawStreetLamp(e); break
+      case 'parking_velo': drawBikeRack(e); break
+      case 'fontaine': drawFountain(e); break
     }
   })
   drawEditHandles()
   drawBranchNodesOverlay()
   drawPreview()
+}
+
+/* ------------------------------------------------------------------ */
+/* Helpers communs                                                    */
+/* ------------------------------------------------------------------ */
+
+/** Trace (sans remplir) un polygone fermé à angles droits. */
+function tracePolygon (pts: Pt[]): void {
+  ctxRef.beginPath()
+  pts.forEach((p, i) => {
+    if (i === 0) ctxRef.moveTo(p.x, p.y)
+    else ctxRef.lineTo(p.x, p.y)
+  })
+  ctxRef.closePath()
+}
+
+/** Trace (sans remplir) un rectangle à coins arrondis. */
+function roundRectPath (x: number, y: number, w: number, h: number, r: number): void {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2))
+  ctxRef.beginPath()
+  ctxRef.moveTo(x + rr, y)
+  ctxRef.lineTo(x + w - rr, y)
+  ctxRef.arcTo(x + w, y, x + w, y + rr, rr)
+  ctxRef.lineTo(x + w, y + h - rr)
+  ctxRef.arcTo(x + w, y + h, x + w - rr, y + h, rr)
+  ctxRef.lineTo(x + rr, y + h)
+  ctxRef.arcTo(x, y + h, x, y + h - rr, rr)
+  ctxRef.lineTo(x, y + rr)
+  ctxRef.arcTo(x, y, x + rr, y, rr)
+  ctxRef.closePath()
+}
+
+/** Évite le texte à l'envers : retourne l'angle ramené dans le demi-plan lisible. */
+function uprightAngle (a: number): number {
+  return Math.cos(a) < 0 ? a + Math.PI : a
 }
 
 /* ------------------------------------------------------------------ */
@@ -295,7 +407,7 @@ function drawBranchNodesOverlay (): void {
   ctxRef.strokeStyle = '#ffffff'
   ctxRef.lineWidth = 2
   elementsRef.forEach((e) => {
-    if (['route', 'piste_cyclable', 'chemin_pieton'].includes(e.type)) {
+    if (BRANCHABLE_TYPES.includes(e.type)) {
       e.coords.forEach((coord) => {
         const p = cp(coord)
         ctxRef.beginPath()
@@ -1110,11 +1222,828 @@ function drawTrafficLight (e: MapElement): void {
   ctxRef.restore()
 }
 
+/* ================================================================== */
+/* ===================== NOUVEAUX ÉLÉMENTS ========================== */
+/* ================================================================== */
+
+/* ------------------------------------------------------------------ */
+/* Zones : chaussée, eau, zone piétonne                               */
+/* ------------------------------------------------------------------ */
+
+function drawRoadSurface (e: MapElement): void {
+  const pts: Pt[] = e.coords.map(cp)
+  if (pts.length < 3) return
+  ctxRef.save()
+  ctxRef.lineJoin = 'round'
+  tracePolygon(pts)
+  ctxRef.fillStyle = '#2c2c2c'
+  ctxRef.fill()
+  ctxRef.globalAlpha = 0.55
+  ctxRef.fillStyle = asphaltPattern
+  ctxRef.fill()
+  ctxRef.globalAlpha = 1
+  ctxRef.lineWidth = 1.5
+  ctxRef.strokeStyle = '#1d1d1d'
+  ctxRef.stroke()
+  ctxRef.restore()
+}
+
+function drawWater (e: MapElement): void {
+  const pts: Pt[] = e.coords.map(cp)
+  if (pts.length < 3) return
+
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
+  pts.forEach((p) => {
+    if (p.x < minX) minX = p.x
+    if (p.x > maxX) maxX = p.x
+    if (p.y < minY) minY = p.y
+    if (p.y > maxY) maxY = p.y
+  })
+
+  ctxRef.save()
+  drawSmoothPolygon(pts)
+  ctxRef.fillStyle = waterPattern
+  ctxRef.fill()
+  // Voile en dégradé pour donner de la profondeur
+  const grad = ctxRef.createLinearGradient(minX, minY, maxX, maxY)
+  grad.addColorStop(0, 'rgba(120,190,240,0.45)')
+  grad.addColorStop(1, 'rgba(20,70,120,0.45)')
+  ctxRef.fillStyle = grad
+  ctxRef.fill()
+  ctxRef.lineWidth = 2.5
+  ctxRef.strokeStyle = '#c9c4b8'
+  ctxRef.stroke()
+
+  // Ondulations clippées dans la surface
+  ctxRef.clip()
+  ctxRef.strokeStyle = 'rgba(255,255,255,0.22)'
+  ctxRef.lineWidth = 1.4
+  const waveStep = 16
+  const waveLen = 24
+  for (let y = minY + waveStep / 2; y < maxY; y += waveStep) {
+    ctxRef.beginPath()
+    const phase = ((y - minY) / waveStep) % 2 === 0 ? 0 : waveLen / 2
+    ctxRef.moveTo(minX - waveLen + phase, y)
+    for (let x = minX - waveLen + phase; x < maxX + waveLen; x += waveLen) {
+      ctxRef.quadraticCurveTo(x + waveLen / 4, y - 3, x + waveLen / 2, y)
+      ctxRef.quadraticCurveTo(x + (waveLen * 3) / 4, y + 3, x + waveLen, y)
+    }
+    ctxRef.stroke()
+  }
+  ctxRef.restore()
+}
+
+function drawPedestrianZone (e: MapElement): void {
+  const pts: Pt[] = e.coords.map(cp)
+  if (pts.length < 3) return
+  ctxRef.save()
+  ctxRef.lineJoin = 'round'
+  tracePolygon(pts)
+  ctxRef.fillStyle = pavementPattern
+  ctxRef.fill()
+  ctxRef.lineWidth = 3
+  ctxRef.strokeStyle = '#8f887a'
+  ctxRef.stroke()
+  ctxRef.restore()
+}
+
+/* ------------------------------------------------------------------ */
+/* Voiries : rails de tramway, voie de bus                            */
+/* ------------------------------------------------------------------ */
+
+function drawTramRails (e: MapElement): void {
+  let pts: Pt[] = e.coords.map(cp)
+  if (pts.length < 2) return
+  pts = smoothIfNeeded(e, pts, false)
+  const coord = e.coords[0]
+  if (coord == null) return
+  const lat = coord.lat
+  // `width` = largeur de la plateforme ; l'écartement des rails est l'écartement standard (1,435 m)
+  const bedPx = Math.max(8, metersToPixels(e.width ?? 3, lat))
+  const gaugeHalf = Math.max(2.5, metersToPixels(1.435, lat) / 2)
+  const railPx = Math.max(1.2, metersToPixels(0.1, lat))
+
+  ctxRef.save()
+  ctxRef.lineJoin = 'round'
+  ctxRef.lineCap = 'butt'
+
+  // Plateforme (ballast)
+  pathFromPoints(pts)
+  ctxRef.strokeStyle = ballastPattern
+  ctxRef.lineWidth = bedPx
+  ctxRef.stroke()
+
+  // Traverses
+  const sleeperStep = Math.max(4, metersToPixels(0.7, lat))
+  walkPath(pts, sleeperStep, (p, angle) => {
+    ctxRef.save()
+    ctxRef.translate(p.x, p.y)
+    ctxRef.rotate(angle)
+    ctxRef.strokeStyle = '#4a4540'
+    ctxRef.lineWidth = Math.max(1, sleeperStep * 0.3)
+    ctxRef.beginPath()
+    ctxRef.moveTo(0, -gaugeHalf * 1.35)
+    ctxRef.lineTo(0, gaugeHalf * 1.35)
+    ctxRef.stroke()
+    ctxRef.restore()
+  })
+
+  // Rails
+  ;[gaugeHalf, -gaugeHalf].forEach((off) => {
+    const rail = offsetPolyline(pts, off)
+    const first = rail[0]
+    if (first == null) return
+    ctxRef.beginPath()
+    ctxRef.moveTo(first.x, first.y)
+    for (let k = 1; k < rail.length; k++) {
+      const pk = rail[k]
+      if (pk == null) continue
+      ctxRef.lineTo(pk.x, pk.y)
+    }
+    ctxRef.strokeStyle = '#d4d6d8'
+    ctxRef.lineWidth = railPx
+    ctxRef.stroke()
+  })
+  ctxRef.restore()
+}
+
+function drawBusLane (e: MapElement): void {
+  let pts: Pt[] = e.coords.map(cp)
+  if (pts.length < 2) return
+  pts = smoothIfNeeded(e, pts, false)
+  const coord = e.coords[0]
+  if (coord == null) return
+  const lat = coord.lat
+  const widthPx = Math.max(6, metersToPixels(e.width ?? 3.5, lat))
+
+  ctxRef.save()
+  ctxRef.lineJoin = 'round'
+  ctxRef.lineCap = 'butt'
+
+  // Revêtement rouge
+  pathFromPoints(pts)
+  ctxRef.strokeStyle = busLanePattern
+  ctxRef.lineWidth = widthPx
+  ctxRef.stroke()
+
+  // Bords blancs
+  ;[widthPx / 2, -widthPx / 2].forEach((off) => {
+    const edge = offsetPolyline(pts, off)
+    const first = edge[0]
+    if (first == null) return
+    ctxRef.beginPath()
+    ctxRef.moveTo(first.x, first.y)
+    for (let k = 1; k < edge.length; k++) {
+      const pk = edge[k]
+      if (pk == null) continue
+      ctxRef.lineTo(pk.x, pk.y)
+    }
+    ctxRef.strokeStyle = '#ffffff'
+    ctxRef.lineWidth = Math.max(1.2, widthPx * 0.05)
+    ctxRef.stroke()
+  })
+
+  // Inscription « BUS » répétée
+  const step = metersToPixels(24, lat)
+  if (step >= 24) {
+    const fontPx = Math.max(8, widthPx * 0.42)
+    walkPath(pts, step, (p, angle) => {
+      ctxRef.save()
+      ctxRef.translate(p.x, p.y)
+      ctxRef.rotate(uprightAngle(angle))
+      ctxRef.fillStyle = 'rgba(255,255,255,0.92)'
+      ctxRef.font = `bold ${fontPx}px Arial, sans-serif`
+      ctxRef.textAlign = 'center'
+      ctxRef.textBaseline = 'middle'
+      ctxRef.fillText('BUS', 0, 0)
+      ctxRef.restore()
+    })
+  }
+  ctxRef.restore()
+}
+
+/* ------------------------------------------------------------------ */
+/* Arrêt de bus                                                       */
+/* ------------------------------------------------------------------ */
+
+function drawBusStop (e: MapElement): void {
+  const pts: Pt[] = e.coords.map(cp)
+  if (pts.length < 2) return
+  const [P1, P2] = pts
+  if ((P1 == null) || (P2 == null)) return
+  const coord = e.coords[0]
+  if (coord == null) return
+  const lat = coord.lat
+  const dx = P2.x - P1.x
+  const dy = P2.y - P1.y
+  const total = Math.hypot(dx, dy)
+  if (total < 4) return
+  const angle = Math.atan2(dy, dx)
+  const depth = Math.max(8, metersToPixels(2.8, lat))
+
+  ctxRef.save()
+  ctxRef.translate(P1.x, P1.y)
+  ctxRef.rotate(angle)
+
+  // Zone d'arrêt (marquage jaune)
+  ctxRef.fillStyle = 'rgba(255,204,0,0.14)'
+  ctxRef.fillRect(0, 0, total, depth)
+  ctxRef.strokeStyle = '#ffcc00'
+  ctxRef.lineWidth = Math.max(1.5, depth * 0.07)
+  ctxRef.setLineDash([depth * 0.5, depth * 0.3])
+  ctxRef.strokeRect(0, 0, total, depth)
+  ctxRef.setLineDash([])
+
+  // Inscription
+  if (total > depth * 1.5) {
+    ctxRef.fillStyle = '#ffcc00'
+    ctxRef.font = `bold ${Math.max(7, depth * 0.45)}px Arial, sans-serif`
+    ctxRef.textAlign = 'center'
+    ctxRef.textBaseline = 'middle'
+    ctxRef.save()
+    ctxRef.translate(total / 2, depth / 2)
+    ctxRef.rotate(Math.cos(angle) < 0 ? Math.PI : 0)
+    ctxRef.fillText('BUS', 0, 0)
+    ctxRef.restore()
+  }
+
+  // Abribus côté trottoir
+  const shelterLen = Math.min(total * 0.7, Math.max(12, metersToPixels(3.5, lat)))
+  const shelterDepth = Math.max(4, metersToPixels(1, lat))
+  const sx = (total - shelterLen) / 2
+  const sy = -shelterDepth - 2
+  ctxRef.fillStyle = 'rgba(0,0,0,0.25)'
+  ctxRef.fillRect(sx + 2, sy + 2, shelterLen, shelterDepth)
+  ctxRef.fillStyle = 'rgba(176,214,235,0.75)'
+  ctxRef.fillRect(sx, sy, shelterLen, shelterDepth)
+  ctxRef.strokeStyle = '#4a5560'
+  ctxRef.lineWidth = 1.2
+  ctxRef.strokeRect(sx, sy, shelterLen, shelterDepth)
+  ctxRef.restore()
+}
+
+/* ------------------------------------------------------------------ */
+/* Bâtiments                                                          */
+/* ------------------------------------------------------------------ */
+
+function drawBuilding (e: MapElement): void {
+  const pts: Pt[] = e.coords.map(cp)
+  if (pts.length < 3) return
+  const coord = e.coords[0]
+  if (coord == null) return
+  const lat = coord.lat
+  const hPx = Math.min(90, Math.max(4, metersToPixels((e.height ?? 12) * 0.25, lat)))
+  const off: Pt = { x: 0, y: -hPx }
+
+  ctxRef.save()
+  ctxRef.lineJoin = 'round'
+
+  // Ombre portée
+  tracePolygon(pts.map((p) => ({ x: p.x + hPx * 0.8, y: p.y + hPx * 0.5 })))
+  ctxRef.fillStyle = 'rgba(0,0,0,0.3)'
+  ctxRef.fill()
+
+  // Façades (extrusion)
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i]
+    const b = pts[(i + 1) % pts.length]
+    if ((a == null) || (b == null)) continue
+    const edgeAngle = Math.atan2(b.y - a.y, b.x - a.x)
+    const shade = Math.round(95 + 45 * Math.abs(Math.sin(edgeAngle)))
+    ctxRef.beginPath()
+    ctxRef.moveTo(a.x, a.y)
+    ctxRef.lineTo(b.x, b.y)
+    ctxRef.lineTo(b.x + off.x, b.y + off.y)
+    ctxRef.lineTo(a.x + off.x, a.y + off.y)
+    ctxRef.closePath()
+    ctxRef.fillStyle = `rgb(${shade},${shade},${shade + 6})`
+    ctxRef.fill()
+    ctxRef.lineWidth = 1
+    ctxRef.strokeStyle = 'rgba(40,40,40,0.55)'
+    ctxRef.stroke()
+  }
+
+  // Toit
+  const roof = pts.map((p) => ({ x: p.x + off.x, y: p.y + off.y }))
+  tracePolygon(roof)
+  ctxRef.fillStyle = roofPattern
+  ctxRef.fill()
+  ctxRef.lineWidth = 2
+  ctxRef.strokeStyle = '#5a5a5a'
+  ctxRef.stroke()
+
+  // Liseré clair sur le toit
+  tracePolygon(roof)
+  ctxRef.strokeStyle = 'rgba(255,255,255,0.25)'
+  ctxRef.lineWidth = 1
+  ctxRef.setLineDash([])
+  ctxRef.stroke()
+  ctxRef.restore()
+}
+
+function drawMetroEntrance (e: MapElement): void {
+  const coord = e.coords[0]
+  if (coord == null) return
+  const p = cp(coord)
+  const lat = coord.lat
+  const w = Math.max(14, metersToPixels(3, lat))
+  const h = Math.max(10, metersToPixels(2, lat))
+
+  ctxRef.save()
+  ctxRef.translate(p.x, p.y)
+
+  // Trémie d'escalier
+  ctxRef.fillStyle = 'rgba(0,0,0,0.25)'
+  ctxRef.fillRect(-w / 2 + 2, -h / 2 + 2, w, h)
+  ctxRef.fillStyle = '#4b4f55'
+  ctxRef.fillRect(-w / 2, -h / 2, w, h)
+  ctxRef.strokeStyle = '#d0d3d6'
+  ctxRef.lineWidth = 1.5
+  ctxRef.strokeRect(-w / 2, -h / 2, w, h)
+
+  // Marches
+  ctxRef.strokeStyle = 'rgba(255,255,255,0.45)'
+  ctxRef.lineWidth = 1
+  const steps = 5
+  for (let i = 1; i < steps; i++) {
+    const x = -w / 2 + (w * i) / steps
+    ctxRef.beginPath()
+    ctxRef.moveTo(x, -h / 2 + 2)
+    ctxRef.lineTo(x, h / 2 - 2)
+    ctxRef.stroke()
+  }
+
+  // Panneau « M »
+  const r = Math.max(6, h * 0.45)
+  const cx = 0
+  const cy = -h / 2 - r - 2
+  ctxRef.beginPath()
+  ctxRef.arc(cx, cy, r, 0, Math.PI * 2)
+  ctxRef.fillStyle = '#ffffff'
+  ctxRef.fill()
+  ctxRef.lineWidth = 1.5
+  ctxRef.strokeStyle = '#1d4e9e'
+  ctxRef.stroke()
+  ctxRef.fillStyle = '#1d4e9e'
+  ctxRef.font = `bold ${r * 1.4}px Arial, sans-serif`
+  ctxRef.textAlign = 'center'
+  ctxRef.textBaseline = 'middle'
+  ctxRef.fillText('M', cx, cy + r * 0.06)
+  ctxRef.restore()
+}
+
+/* ------------------------------------------------------------------ */
+/* Véhicules (vue de dessus)                                          */
+/* Repère local : l'arrière est en x = 0, l'avant en x = L,           */
+/* l'axe central en y = 0.                                            */
+/* ------------------------------------------------------------------ */
+
+function drawVehicleLights (L_: number, W: number): void {
+  const lightW = Math.max(1.5, L_ * 0.04)
+  const lightH = Math.max(1.5, W * 0.18)
+  // Phares avant
+  ctxRef.fillStyle = '#fff3b0'
+  ctxRef.fillRect(L_ - lightW, -W * 0.38, lightW, lightH)
+  ctxRef.fillRect(L_ - lightW, W * 0.38 - lightH, lightW, lightH)
+  // Feux arrière
+  ctxRef.fillStyle = '#d33a3a'
+  ctxRef.fillRect(0, -W * 0.38, lightW, lightH)
+  ctxRef.fillRect(0, W * 0.38 - lightH, lightW, lightH)
+}
+
+function drawCarBody (L_: number, W: number, color: string): void {
+  roundRectPath(0, -W / 2, L_, W, W * 0.3)
+  ctxRef.fillStyle = color
+  ctxRef.fill()
+  ctxRef.lineWidth = 1
+  ctxRef.strokeStyle = 'rgba(0,0,0,0.5)'
+  ctxRef.stroke()
+
+  // Habitacle vitré
+  roundRectPath(L_ * 0.2, -W * 0.4, L_ * 0.52, W * 0.8, W * 0.16)
+  ctxRef.fillStyle = 'rgba(20,30,42,0.78)'
+  ctxRef.fill()
+
+  // Toit
+  roundRectPath(L_ * 0.31, -W * 0.34, L_ * 0.28, W * 0.68, W * 0.12)
+  ctxRef.fillStyle = color
+  ctxRef.fill()
+  ctxRef.fillStyle = 'rgba(255,255,255,0.18)'
+  ctxRef.fill()
+
+  drawVehicleLights(L_, W)
+}
+
+function drawTruckBody (L_: number, W: number, color: string): void {
+  const cargoLen = L_ * 0.7
+  const cabLen = L_ * 0.28
+  const cabX = L_ - cabLen
+
+  // Caisse
+  roundRectPath(0, -W / 2, cargoLen, W, W * 0.08)
+  ctxRef.fillStyle = '#dcdcdc'
+  ctxRef.fill()
+  ctxRef.lineWidth = 1
+  ctxRef.strokeStyle = 'rgba(0,0,0,0.5)'
+  ctxRef.stroke()
+  ctxRef.strokeStyle = 'rgba(0,0,0,0.15)'
+  for (let i = 1; i < 4; i++) {
+    const x = (cargoLen * i) / 4
+    ctxRef.beginPath()
+    ctxRef.moveTo(x, -W / 2 + 1)
+    ctxRef.lineTo(x, W / 2 - 1)
+    ctxRef.stroke()
+  }
+
+  // Cabine
+  roundRectPath(cabX, -W * 0.46, cabLen, W * 0.92, W * 0.2)
+  ctxRef.fillStyle = color
+  ctxRef.fill()
+  ctxRef.lineWidth = 1
+  ctxRef.strokeStyle = 'rgba(0,0,0,0.5)'
+  ctxRef.stroke()
+
+  // Pare-brise
+  roundRectPath(cabX + cabLen * 0.5, -W * 0.36, cabLen * 0.38, W * 0.72, W * 0.1)
+  ctxRef.fillStyle = 'rgba(20,30,42,0.78)'
+  ctxRef.fill()
+
+  drawVehicleLights(L_, W)
+}
+
+function drawBusBody (L_: number, W: number, color: string): void {
+  roundRectPath(0, -W / 2, L_, W, W * 0.22)
+  ctxRef.fillStyle = color
+  ctxRef.fill()
+  ctxRef.lineWidth = 1
+  ctxRef.strokeStyle = 'rgba(0,0,0,0.5)'
+  ctxRef.stroke()
+
+  // Toit clair
+  roundRectPath(L_ * 0.03, -W * 0.38, L_ * 0.88, W * 0.76, W * 0.14)
+  ctxRef.fillStyle = 'rgba(255,255,255,0.22)'
+  ctxRef.fill()
+
+  // Fenêtres latérales
+  const windows = Math.max(3, Math.round(L_ / (W * 1.0)))
+  const winLen = (L_ * 0.8) / windows
+  ctxRef.fillStyle = 'rgba(20,30,42,0.78)'
+  for (let i = 0; i < windows; i++) {
+    const x = L_ * 0.05 + i * winLen + winLen * 0.1
+    ctxRef.fillRect(x, -W * 0.5 + 1, winLen * 0.8, Math.max(1.5, W * 0.1))
+    ctxRef.fillRect(x, W * 0.5 - 1 - Math.max(1.5, W * 0.1), winLen * 0.8, Math.max(1.5, W * 0.1))
+  }
+
+  // Pare-brise
+  roundRectPath(L_ * 0.93, -W * 0.4, L_ * 0.05, W * 0.8, W * 0.08)
+  ctxRef.fillStyle = 'rgba(20,30,42,0.85)'
+  ctxRef.fill()
+
+  drawVehicleLights(L_, W)
+}
+
+function drawTramBody (L_: number, W: number, color: string): void {
+  const sections = 3
+  const gap = Math.max(1.5, L_ * 0.012)
+  const secLen = (L_ - gap * (sections - 1)) / sections
+
+  for (let s = 0; s < sections; s++) {
+    const x0 = s * (secLen + gap)
+    roundRectPath(x0, -W / 2, secLen, W, W * 0.2)
+    ctxRef.fillStyle = color
+    ctxRef.fill()
+    ctxRef.lineWidth = 1
+    ctxRef.strokeStyle = 'rgba(0,0,0,0.5)'
+    ctxRef.stroke()
+
+    // Toit clair
+    roundRectPath(x0 + secLen * 0.04, -W * 0.36, secLen * 0.92, W * 0.72, W * 0.12)
+    ctxRef.fillStyle = 'rgba(255,255,255,0.25)'
+    ctxRef.fill()
+
+    // Fenêtres
+    const windows = 4
+    const winLen = (secLen * 0.84) / windows
+    ctxRef.fillStyle = 'rgba(20,30,42,0.78)'
+    const winH = Math.max(1.5, W * 0.1)
+    for (let i = 0; i < windows; i++) {
+      const x = x0 + secLen * 0.08 + i * winLen + winLen * 0.1
+      ctxRef.fillRect(x, -W * 0.5 + 1, winLen * 0.8, winH)
+      ctxRef.fillRect(x, W * 0.5 - 1 - winH, winLen * 0.8, winH)
+    }
+  }
+
+  // Articulations
+  ctxRef.fillStyle = '#2a2a2a'
+  for (let s = 0; s < sections - 1; s++) {
+    const x = (s + 1) * secLen + s * gap
+    ctxRef.fillRect(x, -W * 0.3, gap, W * 0.6)
+  }
+
+  // Pare-brise avant + arrière
+  ctxRef.fillStyle = 'rgba(20,30,42,0.85)'
+  roundRectPath(L_ - L_ * 0.03, -W * 0.4, L_ * 0.025, W * 0.8, W * 0.06)
+  ctxRef.fill()
+
+  drawVehicleLights(L_, W)
+}
+
+function drawTwoWheelerBody (L_: number, W: number, color: string): void {
+  // Roues
+  ctxRef.fillStyle = '#1c1c1c'
+  const wheelLen = L_ * 0.26
+  const wheelW = Math.max(1.5, W * 0.28)
+  roundRectPath(0, -wheelW / 2, wheelLen, wheelW, wheelW / 2)
+  ctxRef.fill()
+  roundRectPath(L_ - wheelLen, -wheelW / 2, wheelLen, wheelW, wheelW / 2)
+  ctxRef.fill()
+
+  // Carrosserie
+  roundRectPath(L_ * 0.18, -W * 0.22, L_ * 0.64, W * 0.44, W * 0.2)
+  ctxRef.fillStyle = color
+  ctxRef.fill()
+  ctxRef.lineWidth = 1
+  ctxRef.strokeStyle = 'rgba(0,0,0,0.5)'
+  ctxRef.stroke()
+
+  // Guidon
+  ctxRef.strokeStyle = '#222'
+  ctxRef.lineWidth = Math.max(1.2, W * 0.1)
+  ctxRef.beginPath()
+  ctxRef.moveTo(L_ * 0.72, -W * 0.5)
+  ctxRef.lineTo(L_ * 0.72, W * 0.5)
+  ctxRef.stroke()
+
+  // Pilote
+  ctxRef.beginPath()
+  ctxRef.arc(L_ * 0.5, 0, Math.max(2, W * 0.3), 0, Math.PI * 2)
+  ctxRef.fillStyle = '#f0b88a'
+  ctxRef.fill()
+  ctxRef.strokeStyle = 'rgba(0,0,0,0.5)'
+  ctxRef.lineWidth = 1
+  ctxRef.stroke()
+}
+
+function drawBicycleBody (L_: number, W: number, color: string): void {
+  // Roues
+  ctxRef.fillStyle = '#1c1c1c'
+  const wheelLen = L_ * 0.28
+  const wheelW = Math.max(1.2, W * 0.2)
+  roundRectPath(0, -wheelW / 2, wheelLen, wheelW, wheelW / 2)
+  ctxRef.fill()
+  roundRectPath(L_ - wheelLen, -wheelW / 2, wheelLen, wheelW, wheelW / 2)
+  ctxRef.fill()
+
+  // Cadre
+  ctxRef.strokeStyle = color
+  ctxRef.lineWidth = Math.max(1.2, W * 0.14)
+  ctxRef.lineCap = 'round'
+  ctxRef.beginPath()
+  ctxRef.moveTo(wheelLen * 0.5, 0)
+  ctxRef.lineTo(L_ - wheelLen * 0.5, 0)
+  ctxRef.stroke()
+
+  // Guidon
+  ctxRef.strokeStyle = '#222'
+  ctxRef.lineWidth = Math.max(1, W * 0.1)
+  ctxRef.beginPath()
+  ctxRef.moveTo(L_ * 0.76, -W * 0.5)
+  ctxRef.lineTo(L_ * 0.76, W * 0.5)
+  ctxRef.stroke()
+
+  // Cycliste (épaules + tête)
+  ctxRef.fillStyle = color
+  ctxRef.beginPath()
+  ctxRef.ellipse(L_ * 0.5, 0, Math.max(1.5, L_ * 0.07), Math.max(2, W * 0.42), 0, 0, Math.PI * 2)
+  ctxRef.fill()
+  ctxRef.beginPath()
+  ctxRef.arc(L_ * 0.56, 0, Math.max(1.5, W * 0.2), 0, Math.PI * 2)
+  ctxRef.fillStyle = '#f0b88a'
+  ctxRef.fill()
+}
+
+function drawVehicle (e: MapElement): void {
+  const pts: Pt[] = e.coords.map(cp)
+  if (pts.length < 2) return
+  const [P1, P2] = pts
+  if ((P1 == null) || (P2 == null)) return
+  const coord = e.coords[0]
+  if (coord == null) return
+  const spec = VEHICLE_SPECS[e.type as VehicleType]
+  if (spec == null) return
+
+  const lat = coord.lat
+  const L_ = Math.max(spec.minLen, metersToPixels(spec.len, lat))
+  const W = Math.max(spec.minWid, metersToPixels(spec.wid, lat))
+  const angle = Math.atan2(P2.y - P1.y, P2.x - P1.x)
+  const color = e.color ?? spec.color
+
+  ctxRef.save()
+  ctxRef.translate(P1.x, P1.y)
+  ctxRef.rotate(angle)
+  ctxRef.lineJoin = 'round'
+
+  // Ombre portée
+  roundRectPath(L_ * 0.04, -W / 2 + W * 0.12, L_, W, W * 0.25)
+  ctxRef.fillStyle = 'rgba(0,0,0,0.28)'
+  ctxRef.fill()
+
+  switch (e.type) {
+    case 'vehicule': drawCarBody(L_, W, color); break
+    case 'camion': drawTruckBody(L_, W, color); break
+    case 'bus': drawBusBody(L_, W, color); break
+    case 'tramway': drawTramBody(L_, W, color); break
+    case 'deux_roues': drawTwoWheelerBody(L_, W, color); break
+    case 'velo': drawBicycleBody(L_, W, color); break
+  }
+  ctxRef.restore()
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobilier urbain                                                    */
+/* ------------------------------------------------------------------ */
+
+function drawBench (e: MapElement): void {
+  const pts: Pt[] = e.coords.map(cp)
+  if (pts.length < 2) return
+  const [P1, P2] = pts
+  if ((P1 == null) || (P2 == null)) return
+  const coord = e.coords[0]
+  if (coord == null) return
+  const lat = coord.lat
+  const len = Math.hypot(P2.x - P1.x, P2.y - P1.y)
+  if (len < 3) return
+  const angle = Math.atan2(P2.y - P1.y, P2.x - P1.x)
+  const depth = Math.max(4, metersToPixels(0.5, lat))
+
+  ctxRef.save()
+  ctxRef.translate(P1.x, P1.y)
+  ctxRef.rotate(angle)
+
+  // Ombre
+  ctxRef.fillStyle = 'rgba(0,0,0,0.25)'
+  ctxRef.fillRect(1.5, -depth / 2 + 1.5, len, depth)
+
+  // Assise (lattes)
+  ctxRef.fillStyle = '#9b6b3e'
+  ctxRef.fillRect(0, -depth / 2, len, depth)
+  ctxRef.strokeStyle = 'rgba(0,0,0,0.35)'
+  ctxRef.lineWidth = 1
+  const slats = 3
+  for (let i = 1; i < slats; i++) {
+    const y = -depth / 2 + (depth * i) / slats
+    ctxRef.beginPath()
+    ctxRef.moveTo(0, y)
+    ctxRef.lineTo(len, y)
+    ctxRef.stroke()
+  }
+  ctxRef.strokeStyle = '#3a2a1a'
+  ctxRef.lineWidth = 1.5
+  ctxRef.strokeRect(0, -depth / 2, len, depth)
+
+  // Pieds métalliques
+  ctxRef.fillStyle = '#2f3338'
+  const legW = Math.max(1.5, depth * 0.22)
+  ctxRef.fillRect(len * 0.08, -depth / 2 - 1, legW, depth + 2)
+  ctxRef.fillRect(len * 0.92 - legW, -depth / 2 - 1, legW, depth + 2)
+  ctxRef.restore()
+}
+
+function drawStreetLamp (e: MapElement): void {
+  const coord = e.coords[0]
+  if (coord == null) return
+  const p = cp(coord)
+  const lat = coord.lat
+  const haloR = Math.max(14, metersToPixels(4, lat))
+
+  ctxRef.save()
+  const grad = ctxRef.createRadialGradient(p.x, p.y, 1, p.x, p.y, haloR)
+  grad.addColorStop(0, 'rgba(255,236,160,0.45)')
+  grad.addColorStop(1, 'rgba(255,236,160,0)')
+  ctxRef.beginPath()
+  ctxRef.arc(p.x, p.y, haloR, 0, Math.PI * 2)
+  ctxRef.fillStyle = grad
+  ctxRef.fill()
+
+  // Mât
+  ctxRef.beginPath()
+  ctxRef.arc(p.x, p.y, 3.2, 0, Math.PI * 2)
+  ctxRef.fillStyle = '#2f3338'
+  ctxRef.fill()
+  ctxRef.lineWidth = 1.2
+  ctxRef.strokeStyle = '#ffffff'
+  ctxRef.stroke()
+
+  // Lampe
+  ctxRef.beginPath()
+  ctxRef.arc(p.x, p.y, 1.4, 0, Math.PI * 2)
+  ctxRef.fillStyle = '#ffe58a'
+  ctxRef.fill()
+  ctxRef.restore()
+}
+
+function drawBikeRack (e: MapElement): void {
+  const pts: Pt[] = e.coords.map(cp)
+  if (pts.length < 2) return
+  const [P1, P2] = pts
+  if ((P1 == null) || (P2 == null)) return
+  const coord = e.coords[0]
+  if (coord == null) return
+  const lat = coord.lat
+  const len = Math.hypot(P2.x - P1.x, P2.y - P1.y)
+  if (len < 4) return
+  const angle = Math.atan2(P2.y - P1.y, P2.x - P1.x)
+  const spacing = Math.max(5, metersToPixels(0.8, lat))
+  const hoopLen = Math.max(6, metersToPixels(0.8, lat))
+  const hoopW = Math.max(2, metersToPixels(0.12, lat))
+
+  ctxRef.save()
+  ctxRef.translate(P1.x, P1.y)
+  ctxRef.rotate(angle)
+  ctxRef.lineCap = 'round'
+
+  const count = Math.max(1, Math.floor(len / spacing))
+  const startX = (len - (count - 1) * spacing) / 2
+  for (let i = 0; i < count; i++) {
+    const x = startX + i * spacing
+    // Ombre
+    ctxRef.strokeStyle = 'rgba(0,0,0,0.25)'
+    ctxRef.lineWidth = hoopW
+    ctxRef.beginPath()
+    ctxRef.moveTo(x + 1, -hoopLen / 2 + 1)
+    ctxRef.lineTo(x + 1, hoopLen / 2 + 1)
+    ctxRef.stroke()
+    // Arceau
+    ctxRef.strokeStyle = '#c4c9ce'
+    ctxRef.lineWidth = hoopW
+    ctxRef.beginPath()
+    ctxRef.moveTo(x, -hoopLen / 2)
+    ctxRef.lineTo(x, hoopLen / 2)
+    ctxRef.stroke()
+  }
+  ctxRef.restore()
+}
+
+function drawFountain (e: MapElement): void {
+  const coord = e.coords[0]
+  if (coord == null) return
+  const p = cp(coord)
+  const lat = coord.lat
+  const r = Math.max(7, metersToPixels(e.radius ?? 1.5, lat))
+
+  ctxRef.save()
+  // Ombre
+  ctxRef.beginPath()
+  ctxRef.arc(p.x + r * 0.12, p.y + r * 0.15, r, 0, Math.PI * 2)
+  ctxRef.fillStyle = 'rgba(0,0,0,0.25)'
+  ctxRef.fill()
+
+  // Margelle
+  ctxRef.beginPath()
+  ctxRef.arc(p.x, p.y, r, 0, Math.PI * 2)
+  ctxRef.fillStyle = '#cfcabd'
+  ctxRef.fill()
+  ctxRef.lineWidth = 1.5
+  ctxRef.strokeStyle = '#8f887a'
+  ctxRef.stroke()
+
+  // Eau
+  const grad = ctxRef.createRadialGradient(p.x - r * 0.2, p.y - r * 0.2, r * 0.1, p.x, p.y, r * 0.82)
+  grad.addColorStop(0, '#9fd4f5')
+  grad.addColorStop(1, '#3f86bb')
+  ctxRef.beginPath()
+  ctxRef.arc(p.x, p.y, r * 0.82, 0, Math.PI * 2)
+  ctxRef.fillStyle = grad
+  ctxRef.fill()
+
+  // Ondes
+  ctxRef.strokeStyle = 'rgba(255,255,255,0.45)'
+  ctxRef.lineWidth = 1
+  ;[0.62, 0.42].forEach((k) => {
+    ctxRef.beginPath()
+    ctxRef.arc(p.x, p.y, r * k, 0, Math.PI * 2)
+    ctxRef.stroke()
+  })
+
+  // Jet central
+  ctxRef.beginPath()
+  ctxRef.arc(p.x, p.y, Math.max(2, r * 0.16), 0, Math.PI * 2)
+  ctxRef.fillStyle = '#ffffff'
+  ctxRef.fill()
+  ctxRef.strokeStyle = '#8f887a'
+  ctxRef.lineWidth = 1
+  ctxRef.stroke()
+  ctxRef.restore()
+}
+
 /* ------------------------------------------------------------------ */
 /* Aperçu du tracé en cours                                           */
 /* ------------------------------------------------------------------ */
 
-const SMOOTHABLE_TYPES: readonly string[] = ['route', 'piste_cyclable', 'chemin_pieton', 'stationnement']
+const SMOOTHABLE_TYPES: readonly string[] = ['route', 'piste_cyclable', 'chemin_pieton', 'stationnement', 'rails_tramway', 'voie_bus']
 
 function drawPreview (): void {
   if (drawingPointsRef.length === 0) return
