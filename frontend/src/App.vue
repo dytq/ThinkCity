@@ -84,6 +84,9 @@
         <button v-if="uiTool === 'edit' && hasSelection" class="action-btn delete-selected"
                 id="btn-delete-selected" title="Supprimer l'élément sélectionné (touche Suppr)"
                 @click="deleteSelected">🗑️ Supprimer l'élément</button>
+        <button v-if="uiTool === 'edit' && hasSelection" class="action-btn duplicate-selected"
+          id="btn-duplicate-selected" title="Dupliquer l'élément sélectionné"
+          @click="duplicateSelected">📋 Dupliquer l'élément</button>
       </div>
     </section>
 
@@ -898,6 +901,25 @@ function deleteSelected(): void {
   setSelected(null)
   updateStatus()
   draw()
+}
+
+function duplicateSelected(): void {
+  if (!selectedElementForEdit) return
+  const offset = 0.00002
+  const duplicatedCoords = selectedElementForEdit.coords.map(c => ({
+    lat: c.lat + offset,
+    lng: c.lng + offset
+  }))
+
+  const duplicated: DrawnElement = {
+    ...selectedElementForEdit,
+    id: idCounter++,
+    coords: duplicatedCoords,
+    z: (selectedElementForEdit.z !== undefined ? selectedElementForEdit.z : zOrderBase[selectedElementForEdit.type] || 0) + 0.1
+  }
+  elements.push(duplicated)
+  draw()
+  setSelected(duplicated)
 }
 
 function onMapClick(ev: L.LeafletMouseEvent): void {
