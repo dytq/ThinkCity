@@ -17,6 +17,7 @@
       <div class="legend-item"><span class="swatch" style="background:#2c2c2c; border:2px solid #3c8a3c;"></span>Bande / rue cyclable / chevrons</div>
       <div class="legend-item"><span class="swatch" style="background:#b9b2a3;"></span>Chemin piéton / Zone piétonne</div>
       <div class="legend-item"><span class="swatch" style="background:#ffffff;"></span>Passage piéton / Cédez-le-passage</div>
+      <div class="legend-item"><span class="swatch" style="background:repeating-linear-gradient(90deg,#fff,#fff 6px,#2c2c2c 6px,#2c2c2c 10px);"></span>Ligne continue / discontinue</div>
       <div class="legend-item"><span class="swatch" style="background:#e14b4b;"></span>Feu tricolore</div>
       <div class="legend-item"><span class="swatch" style="background:#ffcc00;"></span>Feu clignotant</div>
       <div class="legend-item"><span class="swatch" style="background:#4a7c3a;"></span>Espace vert / Arbre</div>
@@ -34,7 +35,6 @@
         <div>
           <h2>{{ activeToolInfo.label }}</h2>
           <p v-if="uiTool === 'edit'">Propriétés de l'élément</p>
-          <p v-else-if="uiTool === 'delete'">Aucune propriété</p>
           <p v-else>Propriétés avant placement</p>
         </div>
       </header>
@@ -43,21 +43,21 @@
         <!-- Champs par type : tous restent dans le DOM (v-show) pour que render.js
              puisse toujours lire les mêmes id via byId() -->
         <template v-for="f in fields" :key="f.id">
-          <div class="setting-row" v-show="f.tools.includes(uiTool)" :class="{ 'is-check': f.type === 'checkbox' }">
+          <div class="setting-row" v-show="isFieldVisible(f)" :class="{ 'is-check': f.type === 'checkbox' }">
             <label :for="f.id">{{ f.label }}</label>
 
-            <input v-if="f.type === 'number'" type="number" :id="f.id" 
-                  v-model.number="settingsValues[f.id]"
-                  :min="f.min" :max="f.max" :step="f.step" @input="draw" @change="draw">
+            <input v-if="f.type === 'number'" type="number" :id="f.id"
+                  :value="fieldText(f)" :min="f.min" :max="f.max" :step="f.step"
+                  @input="onFieldInput(f, $event)">
 
-            <input v-else-if="f.type === 'color'" type="color" :id="f.id" 
-                  v-model="settingsValues[f.id]" @input="draw" @change="draw">
+            <input v-else-if="f.type === 'color'" type="color" :id="f.id"
+                  :value="fieldText(f)" @input="onFieldInput(f, $event)">
 
-            <input v-else-if="f.type === 'checkbox'" type="checkbox" :id="f.id" 
-                  v-model="settingsValues[f.id]" @input="draw" @change="draw">
+            <input v-else-if="f.type === 'checkbox'" type="checkbox" :id="f.id"
+                  :checked="fieldChecked(f)" @change="onFieldInput(f, $event)">
 
-            <select v-else-if="f.type === 'select'" :id="f.id" 
-                    v-model="settingsValues[f.id]" @input="draw" @change="draw">
+            <select v-else-if="f.type === 'select'" :id="f.id"
+                    :value="fieldText(f)" @change="onFieldInput(f, $event)">
               <option v-for="o in f.options" :key="o[0]" :value="o[0]">{{ o[1] }}</option>
             </select>
           </div>
@@ -69,14 +69,21 @@
           <input type="number" id="set-selected-z" :value="selectedZ" step="1" @input="onZInput">
         </div>
         <p class="props-empty" v-if="uiTool === 'edit' && !hasSelection">
-          Cliquez sur un élément de la carte pour modifier sa géométrie et son ordre Z.
+          Cliquez sur un élément de la carte pour afficher et modifier ses propriétés, sa géométrie et son ordre Z.
         </p>
         <p class="props-empty" v-else-if="uiTool === 'edit' && hasSelection">
           Type : <strong>{{ selectedType }}</strong>. Glissez une poignée pour déplacer un point.
         </p>
+        <p class="props-empty" v-if="uiTool === 'edit' && hasSelection && !hasEditFields">
+          Cet élément n'a pas de paramètre à régler.
+        </p>
         <p class="props-empty" v-if="uiTool && uiTool !== 'edit' && !hasFieldsForTool">
           Cet élément n'a pas de paramètre à régler.
         </p>
+
+        <button v-if="uiTool === 'edit' && hasSelection" class="action-btn delete-selected"
+                id="btn-delete-selected" title="Supprimer l'élément sélectionné (touche Suppr)"
+                @click="deleteSelected">🗑️ Supprimer l'élément</button>
       </div>
     </section>
 
@@ -85,7 +92,7 @@
       <!-- <div class="status" id="status-bar" v-html="statusHtml"></div>-->
 
       <!-- Plateau d'outils de la catégorie active -->
-      <div class="tray" id="tool-grid">
+      <div class="tray" id="tool-grid" v-show="uiTool !== 'edit'">
         <button v-for="t in currentCategory.tools" :key="t.id"
                 class="tool-btn" :class="[{ active: uiTool === t.id }, t.cls]"
                 :data-tool="t.id" :title="t.label" @click="onToolClick(t.id)">
@@ -97,9 +104,23 @@
       <!-- Barre des catégories + actions -->
       <div class="cats-bar">
         <button v-for="c in categories" :key="c.id" class="cat-btn"
-                :class="{ active: activeCat === c.id }" :title="c.label" @click="activeCat = c.id">
+                :class="{ active: activeCat === c.id && uiTool !== 'edit' }" :title="c.label" @click="onCategoryClick(c.id)">
           <span class="ico">{{ c.icon }}</span>
           <span class="lbl">{{ c.label }}</span>
+        </button>
+
+        <!-- Éditer : remplace l'ancienne catégorie « Outils » -->
+        <button class="cat-btn edit-cat" :class="{ active: uiTool === 'edit' }" title="Éditer un élément" @click="onToolClick('edit')">
+          <span class="ico">🔨</span>
+          <span class="lbl">Éditer</span>
+        </button>
+
+        <!-- Afficher / masquer les éléments déjà ajoutés -->
+        <button class="cat-btn visibility-cat" :class="{ off: !elementsVisible }"
+                :title="elementsVisible ? 'Masquer les éléments ajoutés' : 'Afficher les éléments ajoutés'"
+                @click="toggleElementsVisible">
+          <span class="ico">{{ elementsVisible ? '👁️' : '🙈' }}</span>
+          <span class="lbl">{{ elementsVisible ? 'Masquer' : 'Afficher' }}</span>
         </button>
 
         <span class="sep"></span>
@@ -165,6 +186,8 @@ type SettingValue = string | number | boolean
 
 interface Field {
   id: string
+  /** Propriété de MapElement modifiée en mode édition */
+  prop: keyof MapElement
   label: string
   type: 'number' | 'color' | 'checkbox' | 'select'
   def: SettingValue
@@ -195,7 +218,10 @@ const showLegend = ref(false)
 const statusHtml = ref('')
 const hasSelection = ref(false)
 const selectedZ = ref(0)
-const selectedType = ref('')
+const selectedType = ref('')          // libellé du type sélectionné
+const selectedTypeId = ref('')        // id du type sélectionné (ex. 'route')
+const elementsVisible = ref(true)    // false = éléments ajoutés masqués
+const editRev = ref(0)                // force le rafraîchissement du panneau après modification
 
 /* ============================================================
    CATÉGORIES DU DOCK (mêmes icônes qu'avant)
@@ -206,7 +232,8 @@ const categories: Category[] = [
     { id: 'rond_point',    icon: '⭕', label: 'Rond-point' },
     { id: 'piste_cyclable', icon: '🚴', label: 'Piste cycl.' },
     { id: 'chemin_pieton',  icon: '🧱', label: 'Chemin piéton' },
-    { id: 'rails_tramway', icon: '🚊', label: 'Rails Tramway'}
+    { id: 'rails_tramway', icon: '🚊', label: 'Rails Tramway'},
+    { id: 'branch', icon: '🔀', label: 'Ajouter une branche', cls: 'branch-btn' }
   ]},
   { id: 'zones', icon: '⬚', label: 'Zone', tools: [
     { id: 'hachures',      icon: '▨', label: 'Zébras / Hachures' },
@@ -220,6 +247,8 @@ const categories: Category[] = [
     { id: 'cedez_le_passage', icon: '🔻', label: 'Cédez-le-passage' },
     { id: 'ligne_stop',       icon: '🛑', label: 'Ligne de stop' },
     { id: 'stop_sol',         icon: '🅢', label: 'STOP au sol' },
+    { id: 'ligne_continue',  icon: '━', label: 'Ligne Continue' },
+    { id: 'ligne_discontinue', icon: '- - -', label: 'Ligne Discontinue' },
     { id: 'fleche_sol',       icon: '⬆️', label: 'Flèche directionnelle' },
     { id: 'bande_cyclable', icon: '🚲', label: 'Bande cyclable' },
     { id: 'chevron_velo',   icon: '˄˄', label: 'Chevrons vélo' },
@@ -253,11 +282,6 @@ const categories: Category[] = [
     { id: 'parking_velo', icon: '🚲', label: 'Parking Vélo' },
     { id: 'fontaine', icon: '⛲', label: 'Fontaine'},
   ]},
-  { id: 'outils', icon: '🏗️', label: 'Outils', tools: [
-    { id: 'edit',   icon: '🔨', label: 'Éditer le tracé',        cls: 'edit-btn' },
-    { id: 'branch', icon: '🔀', label: 'Ajouter une branche',    cls: 'branch-btn' },
-    { id: 'delete', icon: '💣', label: 'Supprimer un élément',   cls: 'delete-btn' },
-  ]},
 ]
 
 const toolsById: Record<string, ToolInfo & { cat: string }> = {}
@@ -266,9 +290,14 @@ categories.forEach(c => c.tools.forEach(t => { toolsById[t.id] = { ...t, cat: c.
 const currentCategory = computed<Category>(
   () => categories.find(c => c.id === activeCat.value) ?? categories[0]!
 )
-const activeToolInfo = computed<{ icon: string; label: string }>(
-  () => (uiTool.value && toolsById[uiTool.value]) || { icon: '', label: '' }
-)
+const EDIT_INFO = { icon: '🔨', label: 'Éditer' }
+const activeToolInfo = computed<{ icon: string; label: string }>(() => {
+  if (uiTool.value === 'edit') {
+    const t = selectedTypeId.value ? toolsById[selectedTypeId.value] : undefined
+    return t ? { icon: t.icon, label: `Éditer : ${t.label}` } : EDIT_INFO
+  }
+  return (uiTool.value && toolsById[uiTool.value]) || { icon: '', label: '' }
+})
 
 /* ============================================================
    PROPRIÉTÉS PAR TYPE
@@ -276,8 +305,11 @@ const activeToolInfo = computed<{ icon: string; label: string }>(
    donc continuer à lire byId('set-...')).
    ============================================================ */
 const ROUTE_TOOLS = ['route', 'branch']
-const SMOOTH_TOOLS = ['route', 'branch', 'piste_cyclable', 'chemin_pieton', 'bande_cyclable', 'rue_cyclable', 'stationnement', 'rails_tramway', 'voie_bus']
+const SMOOTH_TOOLS = ['route', 'branch', 'piste_cyclable', 'chemin_pieton', 'bande_cyclable', 'rue_cyclable', 'stationnement', 'rails_tramway', 'voie_bus', 'ligne_continue', 'ligne_discontinue']
+const LINE_TOOLS = ['ligne_continue', 'ligne_discontinue']
 const CYCLE_TOOLS = ['piste_cyclable', 'bande_cyclable']
+/* Voiries / tracés qui acceptent le choix de terminaison (ronde ou carrée nette) */
+const LINECAP_TOOLS = ['route', 'branch', 'piste_cyclable', 'chemin_pieton', 'bande_cyclable', 'rails_tramway', 'voie_bus']
 const VEHICLE_TOOLS = ['vehicule', 'camion', 'bus', 'tramway', 'deux_roues', 'velo']
 
 const settingsValues = reactive<Record<string, SettingValue>>({
@@ -285,7 +317,7 @@ const settingsValues = reactive<Record<string, SettingValue>>({
   'set-route-width': 6,
   'set-route-lanes': 2,
   'set-route-direction': 'bidirectional',
-  'set-route-linecap': 'round',
+  'set-linecap': 'round',
   'set-roundabout-radius': 12,
   'set-roundabout-lanes': 2,
   'set-hatch-width': 1.5,
@@ -306,68 +338,80 @@ const settingsValues = reactive<Record<string, SettingValue>>({
   'set-bus-lane-width': 3.5,
   'set-building-height': 12,
   'set-fountain-radius': 1.5,
-  'set-vehicle-color': '#4a6fa5'
+  'set-vehicle-color': '#4a6fa5',
+  'set-line-width': 0.15,
+  'set-line-color': '#ffffff',
+  'set-dash-length': 3,
+  'set-dash-gap': 3.5
 })
 
 const fields: Field[] = [
   // Commun aux tracés
-  { id: 'set-smooth-curves', label: 'Lissage des tracés (courbes de Bézier)', type: 'checkbox', def: false, tools: SMOOTH_TOOLS },
+  { id: 'set-smooth-curves', prop: 'smooth', label: 'Lissage des tracés (courbes de Bézier)', type: 'checkbox', def: false, tools: SMOOTH_TOOLS },
 
   // Route (et branche, qui crée une route)
-  { id: 'set-route-width',     label: 'Largeur route (m)', type: 'number', def: 6, min: 2, max: 20, step: 0.5, tools: ROUTE_TOOLS },
-  { id: 'set-route-lanes',     label: 'Nombre de voies',   type: 'number', def: 2, min: 1, max: 6,  step: 1,   tools: ROUTE_TOOLS },
-  { id: 'set-route-direction', label: 'Sens de circulation', type: 'select', def: 'bidirectional', tools: ROUTE_TOOLS,
+  { id: 'set-route-width',     prop: 'width',     label: 'Largeur route (m)', type: 'number', def: 6, min: 2, max: 20, step: 0.5, tools: ROUTE_TOOLS },
+  { id: 'set-route-lanes',     prop: 'lanes',     label: 'Nombre de voies',   type: 'number', def: 2, min: 1, max: 6,  step: 1,   tools: ROUTE_TOOLS },
+  { id: 'set-route-direction', prop: 'direction', label: 'Sens de circulation', type: 'select', def: 'bidirectional', tools: ROUTE_TOOLS,
     options: [['bidirectional', 'Bidirectionnelle'], ['unidirectional', 'Sens unique']] },
-  { id: 'set-route-linecap',   label: 'Terminaison route', type: 'select', def: 'round', tools: ROUTE_TOOLS,
+  { id: 'set-linecap',         prop: 'lineCap',   label: 'Terminaison du tracé', type: 'select', def: 'round', tools: LINECAP_TOOLS,
     options: [['round', 'Ronde'], ['butt', 'Carrée (nette)']] },
 
   // Rond-point
-  { id: 'set-roundabout-radius', label: 'Rayon rond-point (m)',  type: 'number', def: 12, min: 5, max: 40, step: 1, tools: ['rond_point'] },
-  { id: 'set-roundabout-lanes',  label: 'Voies du rond-point',   type: 'number', def: 2,  min: 1, max: 4,  step: 1, tools: ['rond_point'] },
+  { id: 'set-roundabout-radius', prop: 'radius', label: 'Rayon rond-point (m)',  type: 'number', def: 12, min: 5, max: 40, step: 1, tools: ['rond_point'] },
+  { id: 'set-roundabout-lanes',  prop: 'lanes',  label: 'Voies du rond-point',   type: 'number', def: 2,  min: 1, max: 4,  step: 1, tools: ['rond_point'] },
 
   // Zébras
-  { id: 'set-hatch-width', label: 'Largeur zébras (m)', type: 'number', def: 1.5, min: 0.5, max: 4, step: 0.25, tools: ['hachures'] },
-  { id: 'set-hatch-style', label: 'Forme zébras', type: 'select', def: 'straight', tools: ['hachures'],
+  { id: 'set-hatch-width', prop: 'hatchWidth',  label: 'Largeur zébras (m)', type: 'number', def: 1.5, min: 0.5, max: 4, step: 0.25, tools: ['hachures'] },
+  { id: 'set-hatch-style', prop: 'cornerStyle', label: 'Forme zébras', type: 'select', def: 'straight', tools: ['hachures'],
     options: [['straight', 'Angles droits (Net)'], ['smooth', 'Arrondis']] },
 
   // Piste / bande cyclable
-  { id: 'set-cycle-width',     label: 'Largeur piste cyclable (m)', type: 'number', def: 2, min: 1, max: 6, step: 0.5, tools: CYCLE_TOOLS },
-  { id: 'set-cycle-color',     label: 'Couleur piste cyclable',     type: 'color',  def: '#3c8a3c', tools: CYCLE_TOOLS },
-  { id: 'set-cycle-direction', label: 'Sens piste cyclable', type: 'select', def: 'unidirectional', tools: CYCLE_TOOLS,
+  { id: 'set-cycle-width',     prop: 'width',     label: 'Largeur piste cyclable (m)', type: 'number', def: 2, min: 1, max: 6, step: 0.5, tools: CYCLE_TOOLS },
+  { id: 'set-cycle-color',     prop: 'color',     label: 'Couleur piste cyclable',     type: 'color',  def: '#3c8a3c', tools: CYCLE_TOOLS },
+  { id: 'set-cycle-direction', prop: 'direction', label: 'Sens piste cyclable', type: 'select', def: 'unidirectional', tools: CYCLE_TOOLS,
     options: [['unidirectional', 'Unidirectionnelle'], ['bidirectional', 'Bidirectionnelle']] },
 
   // Chemin piéton
-  { id: 'set-ped-width', label: 'Largeur chemin piéton (m)', type: 'number', def: 2.5, min: 1, max: 8, step: 0.5, tools: ['chemin_pieton'] },
+  { id: 'set-ped-width', prop: 'width', label: 'Largeur chemin piéton (m)', type: 'number', def: 2.5, min: 1, max: 8, step: 0.5, tools: ['chemin_pieton'] },
 
   // Stationnement
-  { id: 'set-park-layout', label: 'Type stationnement', type: 'select', def: 'bataille', tools: ['stationnement'],
+  { id: 'set-park-layout', prop: 'layout', label: 'Type stationnement', type: 'select', def: 'bataille', tools: ['stationnement'],
     options: [['bataille', 'Bataille (90°)'], ['epi', 'Épi (45°)'], ['creneau', 'Créneau (Parallèle)']] },
-  { id: 'set-park-depth', label: 'Profondeur place (m)', type: 'number', def: 5,   min: 1.5, max: 8, step: 0.5, tools: ['stationnement'] },
-  { id: 'set-park-bay',   label: 'Largeur place (m)',    type: 'number', def: 2.5, min: 1.5, max: 5, step: 0.1, tools: ['stationnement'] },
+  { id: 'set-park-depth', prop: 'depth', label: 'Profondeur place (m)', type: 'number', def: 5,   min: 1.5, max: 8, step: 0.5, tools: ['stationnement'] },
+  { id: 'set-park-bay',   prop: 'bay',   label: 'Largeur place (m)',    type: 'number', def: 2.5, min: 1.5, max: 5, step: 0.1, tools: ['stationnement'] },
 
   // Passage piéton
-  { id: 'set-cross-span',   label: 'Largeur passage piéton (m)', type: 'number', def: 3.5, min: 2,   max: 10, step: 0.5, tools: ['passage_pieton'] },
-  { id: 'set-cross-stripe', label: 'Largeur bandes piéton (m)',  type: 'number', def: 0.5, min: 0.3, max: 1,  step: 0.1, tools: ['passage_pieton'] },
+  { id: 'set-cross-span',   prop: 'span',        label: 'Largeur passage piéton (m)', type: 'number', def: 3.5, min: 2,   max: 10, step: 0.5, tools: ['passage_pieton'] },
+  { id: 'set-cross-stripe', prop: 'stripeWidth', label: 'Largeur bandes piéton (m)',  type: 'number', def: 0.5, min: 0.3, max: 1,  step: 0.1, tools: ['passage_pieton'] },
 
   // Flèche au sol
-  { id: 'set-arrow-type', label: 'Type de flèche au sol', type: 'select', def: 'tout_droit', tools: ['fleche_sol'],
+  { id: 'set-arrow-type', prop: 'arrowType', label: 'Type de flèche au sol', type: 'select', def: 'tout_droit', tools: ['fleche_sol'],
     options: [
       ['tout_droit', 'Tout droit'], ['gauche', 'Tourne à gauche'], ['droite', 'Tourne à droite'],
       ['tout_droit_gauche', 'Tout droit + gauche'], ['tout_droit_droite', 'Tout droit + droite']
     ] },
 
   // Arbre
-  { id: 'set-tree-radius', label: 'Rayon houppier arbre (m)', type: 'number', def: 2.2, min: 1, max: 8, step: 0.2, tools: ['arbre'] },
+  { id: 'set-tree-radius', prop: 'radius', label: 'Rayon houppier arbre (m)', type: 'number', def: 2.2, min: 1, max: 8, step: 0.2, tools: ['arbre'] },
 
-  // --- Nouveaux outils ---
-  { id: 'set-tram-width',      label: 'Écartement rails tramway (m)', type: 'number', def: 3,   min: 1.4, max: 6,   step: 0.1, tools: ['rails_tramway'] },
-  { id: 'set-bus-lane-width',  label: 'Largeur voie de bus (m)',      type: 'number', def: 3.5, min: 2.5, max: 6,   step: 0.5, tools: ['voie_bus'] },
-  { id: 'set-building-height', label: 'Hauteur bâtiment (m)',         type: 'number', def: 12,  min: 3,   max: 100, step: 1,   tools: ['batiment'] },
-  { id: 'set-fountain-radius', label: 'Rayon fontaine (m)',           type: 'number', def: 1.5, min: 0.5, max: 8,   step: 0.5, tools: ['fontaine'] },
-  { id: 'set-vehicle-color',   label: 'Couleur du véhicule',          type: 'color',  def: '#4a6fa5', tools: VEHICLE_TOOLS },
+  // Tramway / bus / bâtiment / fontaine / véhicules
+  { id: 'set-tram-width',      prop: 'width',  label: 'Largeur plateforme tramway (m)', type: 'number', def: 3,   min: 1.4, max: 6,   step: 0.1, tools: ['rails_tramway'] },
+  { id: 'set-bus-lane-width',  prop: 'width',  label: 'Largeur voie de bus (m)',        type: 'number', def: 3.5, min: 2.5, max: 6,   step: 0.5, tools: ['voie_bus'] },
+  { id: 'set-building-height', prop: 'height', label: 'Hauteur bâtiment (m)',           type: 'number', def: 12,  min: 3,   max: 100, step: 1,   tools: ['batiment'] },
+  { id: 'set-fountain-radius', prop: 'radius', label: 'Rayon fontaine (m)',             type: 'number', def: 1.5, min: 0.5, max: 8,   step: 0.5, tools: ['fontaine'] },
+  { id: 'set-vehicle-color',   prop: 'color',  label: 'Couleur du véhicule',            type: 'color',  def: '#4a6fa5', tools: VEHICLE_TOOLS },
+
+  // Lignes continue / discontinue
+  { id: 'set-line-width',  prop: 'width',      label: 'Épaisseur de la ligne (m)', type: 'number', def: 0.15, min: 0.05, max: 1,  step: 0.05, tools: LINE_TOOLS },
+  { id: 'set-line-color',  prop: 'color',      label: 'Couleur de la ligne',       type: 'color',  def: '#ffffff', tools: LINE_TOOLS },
+  { id: 'set-dash-length', prop: 'dashLength', label: 'Longueur des tirets (m)',   type: 'number', def: 3,   min: 0.5,  max: 10, step: 0.5,  tools: ['ligne_discontinue'] },
+  { id: 'set-dash-gap',    prop: 'dashGap',    label: 'Espacement des tirets (m)', type: 'number', def: 3.5, min: 0.5,  max: 15, step: 0.5,  tools: ['ligne_discontinue'] },
 ]
 
 const hasFieldsForTool = computed(() => fields.some(f => f.tools.includes(uiTool.value)))
+/** Vrai si l'élément sélectionné (mode édition) a au moins un paramètre réglable */
+const hasEditFields = computed(() => !!selectedTypeId.value && fields.some(f => f.tools.includes(selectedTypeId.value)))
 
 /* ============================================================
    DONNÉES & ÉTAT (moteur de dessin)
@@ -400,6 +444,8 @@ const toolConfig: Record<string, ToolConfig> = {
 
   // Marquages
   stationnement:   {label:'Stationnement',    mode:'line',    minPoints:2},
+  ligne_continue:  {label:'Ligne continue',   mode:'line',    minPoints:2},
+  ligne_discontinue:{label:'Ligne discontinue',mode:'line',   minPoints:2},
   passage_pieton:  {label:'Pass. piéton',     mode:'twopoint',minPoints:2},
   cedez_le_passage:{label:'Cédez-le-passage', mode:'twopoint',minPoints:2},
   ligne_stop:      {label:'Ligne de stop',    mode:'twopoint',minPoints:2},
@@ -454,6 +500,8 @@ const instructions: Record<string, string> = {
   eau:            'Cliquez pour dessiner le contour du plan d\'eau (3 points min). Validez avec Entrée.',
   zone_pietonne:  'Cliquez pour dessiner la zone piétonne (3 points min). Validez avec Entrée.',
   chaussee:       'Cliquez pour dessiner la surface de chaussée (3 points min). Validez avec Entrée.',
+  ligne_continue: 'Cliquez pour tracer la ligne continue. Validez avec Entrée (ou double-clic).',
+  ligne_discontinue: 'Cliquez pour tracer la ligne discontinue. Validez avec Entrée (ou double-clic).',
   passage_pieton: 'Cliquez le point de départ puis le point d\'arrivée du passage piéton (2 clics).',
   cedez_le_passage:'Cliquez les deux extrémités de la ligne de cédez-le-passage (2 clics).',
   ligne_stop:     'Cliquez les deux extrémités de la ligne de stop continue (2 clics).',
@@ -478,9 +526,8 @@ const instructions: Record<string, string> = {
   eclairage_public:'Cliquez sur la carte pour placer le lampadaire.',
   parking_velo:   'Cliquez les deux extrémités de l\'arceau / rangée de vélos (2 clics).',
   fontaine:       'Cliquez sur la carte pour placer la fontaine.',
-  edit:           'Cliquez sur un élément pour afficher ses points de contrôle et ajuster sa géométrie et sa valeur Z.',
-  branch:         'Survolez et cliquez sur un nœud d\'un chemin existant pour y démarrer une nouvelle branche.',
-  delete:         'Cliquez sur un élément existant pour le supprimer.'
+  edit:           'Cliquez sur un élément pour afficher ses propriétés, ajuster sa géométrie, sa valeur Z ou le supprimer.',
+  branch:         'Survolez et cliquez sur un nœud d\'un chemin existant pour y démarrer une nouvelle branche.'
 }
 
 const zOrderBase: Record<ElementType, number> = {
@@ -502,6 +549,8 @@ const zOrderBase: Record<ElementType, number> = {
 
   rond_point: 6,
   stationnement: 7,
+  ligne_continue: 7.5,
+  ligne_discontinue: 7.6,
 
   passage_pieton: 8,
   cedez_le_passage: 9,
@@ -562,11 +611,15 @@ function animateBlinkingLights(): void {
 function setSelected(el: DrawnElement | null): void {
   selectedElementForEdit = el
   hasSelection.value = !!el
+  selectedTypeId.value = el ? el.type : ''
   if(el){
     if(el.z === undefined) el.z = zOrderBase[el.type] || 0
     selectedZ.value = el.z
     selectedType.value = toolsById[el.type]?.label ?? el.type
+  } else {
+    selectedType.value = ''
   }
+  editRev.value++
 }
 
 function onZInput(e: Event): void {
@@ -575,6 +628,55 @@ function onZInput(e: Event): void {
     selectedZ.value = selectedElementForEdit.z
     draw()
   }
+}
+
+/* ============================================================
+   CHAMPS DU PANNEAU : réglages de placement OU propriétés de l'élément édité
+   ============================================================ */
+function isFieldVisible(f: Field): boolean {
+  if(uiTool.value === 'edit') return !!selectedTypeId.value && f.tools.includes(selectedTypeId.value)
+  return f.tools.includes(uiTool.value)
+}
+
+function fieldValue(f: Field): SettingValue {
+  if(uiTool.value === 'edit'){
+    void editRev.value                       // dépendance réactive
+    const el = selectedElementForEdit
+    if(!el) return f.def
+    const v = (el as unknown as Record<string, unknown>)[f.prop]
+    return (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') ? v : f.def
+  }
+  return settingsValues[f.id] ?? f.def
+}
+
+const fieldText = (f: Field): string | number => {
+  const v = fieldValue(f)
+  return typeof v === 'boolean' ? '' : v
+}
+const fieldChecked = (f: Field): boolean => fieldValue(f) === true
+
+function setFieldValue(f: Field, v: SettingValue): void {
+  if(uiTool.value === 'edit'){
+    const el = selectedElementForEdit
+    if(!el) return
+    ;(el as unknown as Record<string, SettingValue>)[f.prop] = v
+    editRev.value++
+  } else {
+    settingsValues[f.id] = v
+  }
+  draw()
+}
+
+function onFieldInput(f: Field, e: Event): void {
+  const t = e.target as HTMLInputElement
+  let v: SettingValue
+  if(f.type === 'checkbox') v = t.checked
+  else if(f.type === 'number'){
+    const n = parseFloat(t.value)
+    if(Number.isNaN(n)) return
+    v = n
+  } else v = t.value
+  setFieldValue(f, v)
 }
 
 /* ============================================================
@@ -590,23 +692,26 @@ function readSettingsForType(type: ElementType): Partial<MapElement> {
       width: num('set-route-width'),
       lanes: num('set-route-lanes'),
       direction: str('set-route-direction') as Direction,
-      lineCap: str('set-route-linecap') as CanvasLineCap,
+      lineCap: str('set-linecap') as CanvasLineCap,
       smooth: bool('set-smooth-curves')
     }
     case 'piste_cyclable': return {
       width: num('set-cycle-width'),
       color: str('set-cycle-color'),
       direction: str('set-cycle-direction') as Direction,
+      lineCap: str('set-linecap') as CanvasLineCap,
       smooth: bool('set-smooth-curves')
     }
     case 'chemin_pieton': return {
       width: num('set-ped-width'),
+      lineCap: str('set-linecap') as CanvasLineCap,
       smooth: bool('set-smooth-curves')
     }
     case 'bande_cyclable': return {
       width: num('set-cycle-width'),
       color: str('set-cycle-color'),
       direction: str('set-cycle-direction') as Direction,
+      lineCap: str('set-linecap') as CanvasLineCap,
       smooth: bool('set-smooth-curves')
     }
     case 'rue_cyclable': return { smooth: bool('set-smooth-curves') }
@@ -631,13 +736,28 @@ function readSettingsForType(type: ElementType): Partial<MapElement> {
     }
     case 'arbre': return { radius: num('set-tree-radius') }
 
+    case 'ligne_continue': return {
+      width: num('set-line-width'),
+      color: str('set-line-color'),
+      smooth: bool('set-smooth-curves')
+    }
+    case 'ligne_discontinue': return {
+      width: num('set-line-width'),
+      color: str('set-line-color'),
+      dashLength: num('set-dash-length'),
+      dashGap: num('set-dash-gap'),
+      smooth: bool('set-smooth-curves')
+    }
+
     // --- nouveaux outils ---
     case 'rails_tramway': return {
       width: num('set-tram-width'),
+      lineCap: str('set-linecap') as CanvasLineCap,
       smooth: bool('set-smooth-curves')
     }
     case 'voie_bus': return {
       width: num('set-bus-lane-width'),
+      lineCap: str('set-linecap') as CanvasLineCap,
       smooth: bool('set-smooth-curves')
     }
     case 'batiment': return { height: num('set-building-height') }
@@ -657,16 +777,32 @@ function addElement(type: ElementType, coords: LatLngLike[]): void {
   const settings = readSettingsForType(type)
   const zVal = zOrderBase[type] !== undefined ? zOrderBase[type] : 0
   elements.push(Object.assign({id: idCounter++, type, coords, z: zVal}, settings))
+  elementsVisible.value = true   // un nouvel élément doit être visible
   draw()
+}
+
+function onCategoryClick(id: string): void {
+  activeCat.value = id
+  if(currentTool === 'edit') selectTool(null)
 }
 
 function onToolClick(id: string): void {
   selectTool(currentTool === id ? null : id)
 }
 
+function toggleElementsVisible(): void {
+  elementsVisible.value = !elementsVisible.value
+  if(!elementsVisible.value){
+    setSelected(null)            // rien à éditer tant que tout est masqué
+    updateStatus()
+  }
+  draw()
+}
+
 function selectTool(name: string | null): void {
   currentTool = name
   uiTool.value = name
+  if(name) elementsVisible.value = true   // travailler sur les éléments nécessite de les voir
   drawingPoints = []
   if(name && toolsById[name]) activeCat.value = toolsById[name].cat
   if(name !== 'edit'){ setSelected(null) }
@@ -729,6 +865,7 @@ function clearAll(): void {
 
 /* Trouve l'élément le plus proche d'un point écran (factorisé : edit + delete) */
 function findNearestElement(containerPoint: L.Point): DrawnElement | null {
+  if(!elementsVisible.value) return null
   let best: DrawnElement | null = null
   let bestDist = 20
 
@@ -754,18 +891,17 @@ function findNearestElement(containerPoint: L.Point): DrawnElement | null {
   return best
 }
 
-function deleteNearElement(containerPoint: L.Point): void {
-  const best = findNearestElement(containerPoint)
-  if(best){
-    elements = elements.filter(e=>e!==best)
-    if(selectedElementForEdit === best){ setSelected(null) }
-    draw()
-  }
+function deleteSelected(): void {
+  const el = selectedElementForEdit
+  if(!el) return
+  elements = elements.filter(e => e !== el)
+  setSelected(null)
+  updateStatus()
+  draw()
 }
 
 function onMapClick(ev: L.LeafletMouseEvent): void {
   if(!currentTool) return
-  if(currentTool==='delete'){ deleteNearElement(ev.containerPoint); return }
 
   if(currentTool==='edit'){
     setSelected(findNearestElement(ev.containerPoint))
@@ -853,6 +989,7 @@ function onMapDblClick(): void {
 function onKeyDown(ev: KeyboardEvent): void {
   const tag = (ev.target as HTMLElement | null)?.tagName
   if(tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
+  if(ev.key === 'Delete' && currentTool === 'edit') deleteSelected()
   if(ev.key === 'Enter') finalizeDrawing()
   if(ev.key === 'Escape') cancelDrawing()
 }
@@ -895,7 +1032,8 @@ onMounted(()=>{
       currentTool,
       toolConfig,
       mousePos,
-      byId
+      byId,
+      showElements: elementsVisible.value
     })
   })
 

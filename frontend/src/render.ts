@@ -57,6 +57,8 @@ export type ElementType =
   | 'eclairage_public'
   | 'parking_velo'
   | 'fontaine'
+  | 'ligne_continue'
+  | 'ligne_discontinue'
 
 type VehicleType = 'vehicule' | 'camion' | 'bus' | 'tramway' | 'deux_roues' | 'velo'
 
@@ -90,6 +92,8 @@ export interface MapElement {
   span?: number
   arrowType?: ArrowType
   height?: number
+  dashLength?: number
+  dashGap?: number
 }
 
 export interface ToolConfigEntry {
@@ -104,6 +108,8 @@ export interface RenderState {
   toolConfig: Record<string, ToolConfigEntry>
   mousePos: LatLngLike | null
   byId: (id: string) => HTMLInputElement
+  /** false = les éléments déjà placés sont masqués (l'aperçu du tracé en cours reste visible) */
+  showElements: boolean
 }
 
 export interface RenderInit {
@@ -131,6 +137,7 @@ let getStateRef: (() => RenderState) | null = null
 let toolConfig: Record<string, ToolConfigEntry> = {}
 let mousePos: LatLngLike | null = null
 let byId: ((id: string) => HTMLInputElement) | null = null
+let showElementsRef = true
 
 let asphaltPattern!: CanvasPattern
 let grassPattern!: CanvasPattern
@@ -164,6 +171,8 @@ const zOrderBase: Record<ElementType, number> = {
 
   rond_point: 6,
   stationnement: 7,
+  ligne_continue: 7.5,
+  ligne_discontinue: 7.6,
 
   passage_pieton: 8,
   cedez_le_passage: 9,
@@ -234,6 +243,7 @@ function syncRenderState (): void {
   toolConfig = state.toolConfig
   mousePos = state.mousePos
   byId = state.byId
+  showElementsRef = state.showElements
 }
 
 function resizeOverlay (): void {
@@ -251,7 +261,7 @@ function draw (): void {
   if (overlayRef.width === 0 || overlayRef.height === 0) return
 
   ctxRef.clearRect(0, 0, overlayRef.width, overlayRef.height)
-  const sorted = [...elementsRef].sort((a, b) => {
+  const sorted = (showElementsRef ? [...elementsRef] : []).sort((a, b) => {
     const za = a.z !== undefined ? a.z : zOrderBase[a.type]
     const zb = b.z !== undefined ? b.z : zOrderBase[b.type]
     return za - zb
@@ -296,10 +306,14 @@ function draw (): void {
       case 'eclairage_public': drawStreetLamp(e); break
       case 'parking_velo': drawBikeRack(e); break
       case 'fontaine': drawFountain(e); break
+      case 'ligne_continue': drawSolidLine(e); break
+      case 'ligne_discontinue': drawDashedLine(e); break
     }
   })
-  drawEditHandles()
-  drawBranchNodesOverlay()
+  if (showElementsRef) {
+    drawEditHandles()
+    drawBranchNodesOverlay()
+  }
   drawPreview()
 }
 
@@ -656,7 +670,7 @@ function drawCyclePath (e: MapElement): void {
   const bidirectional = e.direction === 'bidirectional'
   ctxRef.save()
   ctxRef.lineJoin = 'round'
-  ctxRef.lineCap = 'round'
+  ctxRef.lineCap = e.lineCap ?? 'round'
 
   pathFromPoints(pts)
   ctxRef.strokeStyle = e.color ?? '#3c8a3c'
@@ -728,7 +742,7 @@ function drawPaintedCycleLane (e: MapElement): void {
   const bidirectional = e.direction === 'bidirectional'
   ctxRef.save()
   ctxRef.lineJoin = 'round'
-  ctxRef.lineCap = 'round'
+  ctxRef.lineCap = e.lineCap ?? 'round'
 
   pathFromPoints(pts)
   ctxRef.globalAlpha = 0.3
@@ -806,7 +820,7 @@ function drawPedestrianPath (e: MapElement): void {
 
   ctxRef.save()
   ctxRef.lineJoin = 'round'
-  ctxRef.lineCap = 'round'
+  ctxRef.lineCap = e.lineCap ?? 'round'
 
   // Bordure
   pathFromPoints(pts)
@@ -1328,7 +1342,7 @@ function drawTramRails (e: MapElement): void {
 
   ctxRef.save()
   ctxRef.lineJoin = 'round'
-  ctxRef.lineCap = 'butt'
+  ctxRef.lineCap = e.lineCap ?? 'butt'
 
   // Plateforme (ballast)
   pathFromPoints(pts)
@@ -1381,7 +1395,7 @@ function drawBusLane (e: MapElement): void {
 
   ctxRef.save()
   ctxRef.lineJoin = 'round'
-  ctxRef.lineCap = 'butt'
+  ctxRef.lineCap = e.lineCap ?? 'butt'
 
   // Revêtement rouge
   pathFromPoints(pts)
@@ -2040,10 +2054,57 @@ function drawFountain (e: MapElement): void {
 }
 
 /* ------------------------------------------------------------------ */
+/* Lignes de marquage : continue / discontinue                        */
+/* ------------------------------------------------------------------ */
+
+function drawSolidLine (e: MapElement): void {
+  let pts: Pt[] = e.coords.map(cp)
+  if (pts.length < 2) return
+  pts = smoothIfNeeded(e, pts, false)
+  const coord = e.coords[0]
+  if (coord == null) return
+  const lat = coord.lat
+  const widthPx = Math.max(1.5, metersToPixels(e.width ?? 0.15, lat))
+
+  ctxRef.save()
+  ctxRef.lineJoin = 'round'
+  ctxRef.lineCap = 'butt'
+  ctxRef.setLineDash([])
+  pathFromPoints(pts)
+  ctxRef.strokeStyle = e.color ?? '#ffffff'
+  ctxRef.lineWidth = widthPx
+  ctxRef.stroke()
+  ctxRef.restore()
+}
+
+function drawDashedLine (e: MapElement): void {
+  let pts: Pt[] = e.coords.map(cp)
+  if (pts.length < 2) return
+  pts = smoothIfNeeded(e, pts, false)
+  const coord = e.coords[0]
+  if (coord == null) return
+  const lat = coord.lat
+  const widthPx = Math.max(1.5, metersToPixels(e.width ?? 0.15, lat))
+  const dashPx = Math.max(2, metersToPixels(e.dashLength ?? 3, lat))
+  const gapPx = Math.max(2, metersToPixels(e.dashGap ?? 3.5, lat))
+
+  ctxRef.save()
+  ctxRef.lineJoin = 'round'
+  ctxRef.lineCap = 'butt'
+  ctxRef.setLineDash([dashPx, gapPx])
+  pathFromPoints(pts)
+  ctxRef.strokeStyle = e.color ?? '#ffffff'
+  ctxRef.lineWidth = widthPx
+  ctxRef.stroke()
+  ctxRef.setLineDash([])
+  ctxRef.restore()
+}
+
+/* ------------------------------------------------------------------ */
 /* Aperçu du tracé en cours                                           */
 /* ------------------------------------------------------------------ */
 
-const SMOOTHABLE_TYPES: readonly string[] = ['route', 'piste_cyclable', 'chemin_pieton', 'stationnement', 'rails_tramway', 'voie_bus']
+const SMOOTHABLE_TYPES: readonly string[] = ['route', 'piste_cyclable', 'chemin_pieton', 'stationnement', 'rails_tramway', 'voie_bus', 'ligne_continue', 'ligne_discontinue']
 
 function drawPreview (): void {
   if (drawingPointsRef.length === 0) return
