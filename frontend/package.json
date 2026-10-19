@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
-    "checkstyle":  "ts-standard --project tsconfig.app.json \"src/**/*.ts\"",
+    "checkstyle": "ts-standard --project tsconfig.app.json \"src/**/*.ts\"",
     "checkstyle:fix": "ts-standard --project tsconfig.app.json --fix \"src/**/*.ts\""
   },
   "dependencies": {
@@ -19,6 +19,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@tsconfig/node24": "^24.0.5",
+    "@types/leaflet": "^1.9.22",
     "@types/node": "^24.13.4",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/tsconfig": "^0.9.1",
