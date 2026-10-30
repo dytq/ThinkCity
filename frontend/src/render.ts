@@ -347,6 +347,14 @@ function roundRectPath (x: number, y: number, w: number, h: number, r: number): 
   ctxRef.closePath()
 }
 
+function anchorPattern(pattern: CanvasPattern, coord: LatLngLike): void {
+  const p = cp(coord)
+
+  pattern.setTransform(
+    new DOMMatrix().translate(p.x, p.y)
+  )
+}
+
 /** Évite le texte à l'envers : retourne l'angle ramené dans le demi-plan lisible. */
 function uprightAngle (a: number): number {
   return Math.cos(a) < 0 ? a + Math.PI : a
@@ -459,6 +467,8 @@ function drawRoad (e: MapElement): void {
   ctxRef.lineWidth = widthPx
   ctxRef.stroke()
 
+  anchorPattern(asphaltPattern, e.coords[0]!)
+
   pathFromPoints(pts)
   ctxRef.globalAlpha = 0.55
   ctxRef.strokeStyle = asphaltPattern
@@ -552,6 +562,8 @@ function drawRoundabout (e: MapElement): void {
   const lanes = Math.max(1, Math.round(e.lanes ?? 2))
   const ringWidth = r * (0.3 + lanes * 0.1)
 
+  anchorPattern(asphaltPattern, e.coords[0]!)
+
   ctxRef.save()
   ctxRef.beginPath()
   ctxRef.arc(p.x, p.y, r, 0, Math.PI * 2)
@@ -578,6 +590,8 @@ function drawRoundabout (e: MapElement): void {
     ctxRef.stroke()
     ctxRef.setLineDash([])
   }
+
+  anchorPattern(grassPattern, e.coords[0]!)
 
   ctxRef.beginPath()
   ctxRef.arc(p.x, p.y, r - ringWidth - 2, 0, Math.PI * 2)
@@ -624,6 +638,8 @@ function drawHatchZone (e: MapElement): void {
     }
     ctxRef.closePath()
   }
+
+  anchorPattern(asphaltPattern, e.coords[0]!)
 
   ctxRef.fillStyle = asphaltPattern
   ctxRef.fill()
@@ -677,6 +693,8 @@ function drawCyclePath (e: MapElement): void {
   ctxRef.lineWidth = widthPx
   ctxRef.stroke()
 
+  anchorPattern(bushPattern, e.coords[0]!)
+  
   pathFromPoints(pts)
   ctxRef.globalAlpha = 0.4
   ctxRef.strokeStyle = bushPattern
@@ -828,6 +846,8 @@ function drawPedestrianPath (e: MapElement): void {
   ctxRef.lineWidth = widthPx + 3
   ctxRef.stroke()
 
+  anchorPattern(pavementPattern, e.coords[0]!)
+
   // Dallage
   pathFromPoints(pts)
   ctxRef.strokeStyle = pavementPattern
@@ -858,6 +878,8 @@ function drawParking (e: MapElement): void {
   ctxRef.strokeStyle = '#333333'
   ctxRef.lineWidth = bandThickness
   ctxRef.stroke()
+
+  anchorPattern(asphaltPattern, e.coords[0]!)
 
   pathFromPoints(pts)
   ctxRef.globalAlpha = 0.5
@@ -1168,6 +1190,7 @@ function drawGreenSpace (e: MapElement): void {
   if (pts.length < 3) return
   ctxRef.save()
   drawSmoothPolygon(pts)
+  anchorPattern(grassPattern, e.coords[0]!)
   ctxRef.fillStyle = grassPattern
   ctxRef.fill()
   ctxRef.lineWidth = 2
@@ -1181,6 +1204,7 @@ function drawBushMass (e: MapElement): void {
   if (pts.length < 3) return
   ctxRef.save()
   drawSmoothPolygon(pts)
+  anchorPattern(bushPattern, e.coords[0]!)
   ctxRef.fillStyle = bushPattern
   ctxRef.fill()
   ctxRef.lineWidth = 2.5
@@ -1236,10 +1260,6 @@ function drawTrafficLight (e: MapElement): void {
   ctxRef.restore()
 }
 
-/* ================================================================== */
-/* ===================== NOUVEAUX ÉLÉMENTS ========================== */
-/* ================================================================== */
-
 /* ------------------------------------------------------------------ */
 /* Zones : chaussée, eau, zone piétonne                               */
 /* ------------------------------------------------------------------ */
@@ -1250,6 +1270,7 @@ function drawRoadSurface (e: MapElement): void {
   ctxRef.save()
   ctxRef.lineJoin = 'round'
   tracePolygon(pts)
+  anchorPattern(asphaltPattern, e.coords[0]!)
   ctxRef.fillStyle = '#2c2c2c'
   ctxRef.fill()
   ctxRef.globalAlpha = 0.55
@@ -1276,6 +1297,8 @@ function drawWater (e: MapElement): void {
     if (p.y < minY) minY = p.y
     if (p.y > maxY) maxY = p.y
   })
+
+  anchorPattern(waterPattern, e.coords[0]!)
 
   ctxRef.save()
   drawSmoothPolygon(pts)
@@ -1316,6 +1339,7 @@ function drawPedestrianZone (e: MapElement): void {
   ctxRef.save()
   ctxRef.lineJoin = 'round'
   tracePolygon(pts)
+  anchorPattern(pavementPattern, e.coords[0]!)
   ctxRef.fillStyle = pavementPattern
   ctxRef.fill()
   ctxRef.lineWidth = 3
@@ -1343,6 +1367,8 @@ function drawTramRails (e: MapElement): void {
   ctxRef.save()
   ctxRef.lineJoin = 'round'
   ctxRef.lineCap = e.lineCap ?? 'butt'
+
+  anchorPattern(ballastPattern, e.coords[0]!)
 
   // Plateforme (ballast)
   pathFromPoints(pts)
@@ -1396,6 +1422,8 @@ function drawBusLane (e: MapElement): void {
   ctxRef.save()
   ctxRef.lineJoin = 'round'
   ctxRef.lineCap = e.lineCap ?? 'butt'
+
+  anchorPattern(busLanePattern, e.coords[0]!)
 
   // Revêtement rouge
   pathFromPoints(pts)
@@ -1539,6 +1567,8 @@ function drawBuilding (e: MapElement): void {
     ctxRef.strokeStyle = 'rgba(40,40,40,0.55)'
     ctxRef.stroke()
   }
+
+  anchorPattern(roofPattern, e.coords[0]!)
 
   // Toit
   const roof = pts.map((p) => ({ x: p.x + off.x, y: p.y + off.y }))
